@@ -3,7 +3,16 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QPoint, QRect, QSize, QTimer, Qt
-from PySide6.QtGui import QAction, QColor, QFont, QImage, QPainter, QPen, QPixmap
+from PySide6.QtGui import (
+    QAction,
+    QColor,
+    QFont,
+    QImage,
+    QPainter,
+    QPen,
+    QPixmap,
+    QPolygon,
+)
 from PySide6.QtWidgets import QApplication, QMenu, QWidget
 
 
@@ -13,8 +22,9 @@ class NomzyDog(QWidget):
 
         self.setWindowTitle("Nomzy Desktop Companion")
 
-        # The window is a little taller than the sprite so the speech bubble has space.
-        self.setFixedSize(220, 170)
+        # Wider transparent window so the speech bubble can sit diagonally
+        # from Nomzy's mouth without getting clipped.
+        self.setFixedSize(360, 190)
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -26,7 +36,7 @@ class NomzyDog(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
         self.setAutoFillBackground(False)
 
-        # Mouse/drag state
+        # Mouse / drag state
         self.drag_position = QPoint()
         self.mouse_press_global = QPoint()
         self.is_dragging = False
@@ -48,8 +58,9 @@ class NomzyDog(QWidget):
         self.message_ticks_remaining = 0
 
         # Timer runs every 40 ms.
-        # 25 ticks = about 1 second.
-        self.speech_cooldown_ticks = 25
+        # 1500 ticks ≈ 60 seconds
+        # 4500 ticks ≈ 180 seconds
+        self.speech_cooldown_ticks = random.randint(1500, 4500)
 
         self.messages = [
             "woof!",
@@ -72,9 +83,6 @@ class NomzyDog(QWidget):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.tick)
         self.timer.start(40)
-
-        # Force a first speech bubble after launch so we know it works.
-        QTimer.singleShot(1000, self.say_random_message)
 
     def load_sprite_frames(self):
         repo_root = Path(__file__).resolve().parents[2]
@@ -172,16 +180,11 @@ class NomzyDog(QWidget):
     def say_random_message(self):
         self.message = random.choice(self.messages)
 
-        # Uncomment this for debugging if needed.
-        # print(f"Nomzy says: {self.message}")
-
         # Show message for about 3–5 seconds.
         self.message_ticks_remaining = random.randint(75, 125)
 
-        # After the message disappears, wait before speaking again.
-        # 500 ticks = about 20 seconds.
-        # 1800 ticks = about 72 seconds.
-        self.speech_cooldown_ticks = random.randint(500, 1800)
+        # Talk roughly every 1–3 minutes.
+        self.speech_cooldown_ticks = random.randint(1500, 4500)
 
         self.update()
 
@@ -280,6 +283,35 @@ class NomzyDog(QWidget):
         # Walking frames only while moving.
         return self.sprite_frames[2] if (self.frame // 8) % 2 == 0 else self.sprite_frames[3]
 
+    def get_scaled_sprite(self):
+        sprite = self.current_sprite()
+
+        target_size = QSize(110, 85)
+
+        return sprite.scaled(
+            target_size,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.FastTransformation,
+        )
+
+    def get_sprite_rect(self, scaled_sprite):
+        x = (self.width() - scaled_sprite.width()) // 2
+        y = self.height() - scaled_sprite.height() - 8
+
+        return QRect(x, y, scaled_sprite.width(), scaled_sprite.height())
+
+    def get_mouth_point(self, sprite_rect):
+        # Approximate mouth location based on the sprite's bounding box.
+        # The original sprite faces right.
+        if self.last_direction >= 0:
+            mouth_x = sprite_rect.left() + int(sprite_rect.width() * 0.86)
+        else:
+            mouth_x = sprite_rect.left() + int(sprite_rect.width() * 0.14)
+
+        mouth_y = sprite_rect.top() + int(sprite_rect.height() * 0.38)
+
+        return QPoint(mouth_x, mouth_y)
+
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self.drag_position = (
@@ -337,36 +369,79 @@ class NomzyDog(QWidget):
     def toggle_pause(self):
         self.paused = not self.paused
 
-    def draw_speech_bubble(self, painter):
+    def draw_speech_bubble(self, painter, sprite_rect):
         if not self.message:
             return
 
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        bubble_rect = QRect(18, 8, 184, 46)
+        mouth = self.get_mouth_point(sprite_rect)
 
-        bubble_fill = QColor(245, 238, 255, 245)
-        bubble_outline = QColor("#7B5FA3")
-        text_color = QColor("#2F2538")
+        bubble_width = 125
+        bubble_height = 40
+        bubble_gap = 16
+        bubble_vertical_offset = 64
+
+        if self.last_direction >= 0:
+            # Bubble sits up-right from the mouth.
+            bubble_rect = QRect(
+                mouth.x() + bubble_gap,
+                mouth.y() - bubble_vertical_offset,
+                bubble_width,
+                bubble_height,
+            )
+
+            # Tail points directly to mouth.
+            tail = QPolygon(
+                [
+                    mouth,
+                    QPoint(bubble_rect.left() + 10, bubble_rect.bottom() - 8),
+                    QPoint(bubble_rect.left() + 26, bubble_rect.bottom() - 2),
+                ]
+            )
+        else:
+            # Bubble sits up-left from the mouth.
+            bubble_rect = QRect(
+                mouth.x() - bubble_gap - bubble_width,
+                mouth.y() - bubble_vertical_offset,
+                bubble_width,
+                bubble_height,
+            )
+
+            # Tail points directly to mouth.
+            tail = QPolygon(
+                [
+                    mouth,
+                    QPoint(bubble_rect.right() - 10, bubble_rect.bottom() - 8),
+                    QPoint(bubble_rect.right() - 26, bubble_rect.bottom() - 2),
+                ]
+            )
+
+        # Safety clamp so the bubble stays inside the transparent window.
+        if bubble_rect.left() < 6:
+            bubble_rect.moveLeft(6)
+
+        if bubble_rect.right() > self.width() - 6:
+            bubble_rect.moveRight(self.width() - 6)
+
+        if bubble_rect.top() < 6:
+            bubble_rect.moveTop(6)
+
+        # White and more transparent.
+        bubble_fill = QColor(255, 255, 255, 145)
+        bubble_outline = QColor(170, 170, 170, 130)
+        text_color = QColor(45, 45, 45, 225)
 
         painter.setPen(QPen(bubble_outline, 2))
         painter.setBrush(bubble_fill)
-        painter.drawRoundedRect(bubble_rect, 11, 11)
 
-        # Bubble tail
-        painter.setPen(QPen(bubble_outline, 2))
-        painter.setBrush(bubble_fill)
-        painter.drawPolygon(
-            [
-                QPoint(96, 53),
-                QPoint(112, 53),
-                QPoint(102, 66),
-            ]
-        )
+        # Draw the tail first so the dog sprite can cover the mouth-side point.
+        painter.drawPolygon(tail)
+        painter.drawRoundedRect(bubble_rect, 12, 12)
 
         painter.setPen(text_color)
-        painter.setFont(QFont("Arial", 10))
+        painter.setFont(QFont("Arial", 9))
         painter.drawText(
             bubble_rect,
             Qt.AlignmentFlag.AlignCenter,
@@ -375,41 +450,35 @@ class NomzyDog(QWidget):
 
         painter.restore()
 
-    def draw_nomzy_sprite(self, painter):
-        sprite = self.current_sprite()
-
-        # Controls Nomzy's visual size.
-        target_size = QSize(110, 85)
-
-        scaled_sprite = sprite.scaled(
-            target_size,
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.FastTransformation,
-        )
-
-        x = (self.width() - scaled_sprite.width()) // 2
-        y = self.height() - scaled_sprite.height() - 6
-
+    def draw_nomzy_sprite(self, painter, scaled_sprite, sprite_rect):
         painter.save()
 
-        # Sprite faces right by default.
-        # Flip him when his last movement was left.
         if self.last_direction < 0:
             painter.translate(self.width(), 0)
             painter.scale(-1, 1)
-            x = self.width() - x - scaled_sprite.width()
 
-        painter.drawPixmap(x, y, scaled_sprite)
+            mirrored_x = self.width() - sprite_rect.x() - sprite_rect.width()
+            draw_rect = QRect(
+                mirrored_x,
+                sprite_rect.y(),
+                sprite_rect.width(),
+                sprite_rect.height(),
+            )
+        else:
+            draw_rect = sprite_rect
+
+        painter.drawPixmap(draw_rect, scaled_sprite)
 
         painter.restore()
 
     def paintEvent(self, event):
         painter = QPainter(self)
 
-        # Draw bubble first, then Nomzy.
-        # These are separate so flipping the sprite does not flip the bubble.
-        self.draw_speech_bubble(painter)
-        self.draw_nomzy_sprite(painter)
+        scaled_sprite = self.get_scaled_sprite()
+        sprite_rect = self.get_sprite_rect(scaled_sprite)
+
+        self.draw_speech_bubble(painter, sprite_rect)
+        self.draw_nomzy_sprite(painter, scaled_sprite, sprite_rect)
 
 
 def main():

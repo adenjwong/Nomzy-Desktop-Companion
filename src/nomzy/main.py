@@ -1,3 +1,6 @@
+import ctypes
+import json
+import math
 import random
 import sys
 from pathlib import Path
@@ -16,30 +19,76 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QApplication, QMenu, QWidget
 
 
+DEFAULT_SETTINGS = {
+    "window_width": 360,
+    "window_height": 190,
+
+    "menu_window_width": 360,
+    "menu_window_height": 300,
+    "menu_button_radius": 24,
+
+    "sprite_width": 110,
+    "sprite_height": 85,
+
+    "always_on_top": True,
+    "save_position": True,
+
+    "movement_enabled": True,
+    "idle_min_ticks": 120,
+    "idle_max_ticks": 400,
+    "walk_min_ticks": 10,
+    "walk_max_ticks": 35,
+
+    "speech_enabled": True,
+    "speech_min_ticks": 1500,
+    "speech_max_ticks": 4500,
+    "speech_min_duration_ticks": 75,
+    "speech_max_duration_ticks": 125,
+
+    "speech_bubble_opacity": 145,
+}
+
+
 class NomzyDog(QWidget):
     def __init__(self):
         super().__init__()
 
         self.setWindowTitle("Nomzy Desktop Companion")
+        self.settings = self.load_settings()
 
-        # Wider transparent window so the speech bubble can sit diagonally
-        # from Nomzy's mouth without getting clipped.
-        self.setFixedSize(360, 190)
+        # Normal small window: just enough room for Nomzy.
+        self.base_window_width = int(self.settings["sprite_width"]) + 30
+        self.base_window_height = int(self.settings["sprite_height"]) + 30
 
-        self.setWindowFlags(
-            Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.WindowStaysOnTopHint
-            | Qt.WindowType.Tool
-        )
+        # Speech window: gives room for speech bubble.
+        self.speech_window_width = int(self.settings["window_width"])
+        self.speech_window_height = int(self.settings["window_height"])
+
+        # Menu window: gives room for top/bottom semicircle menus.
+        self.menu_window_width = int(self.settings["menu_window_width"])
+        self.menu_window_height = int(self.settings["menu_window_height"])
+
+        self.setFixedSize(self.base_window_width, self.base_window_height)
+
+        window_flags = Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool
+
+        if self.settings["always_on_top"]:
+            window_flags |= Qt.WindowType.WindowStaysOnTopHint
+
+        self.setWindowFlags(window_flags)
 
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setAutoFillBackground(False)
 
-        # Mouse / drag state
+        # Mouse / drag / menu state
         self.drag_position = QPoint()
         self.mouse_press_global = QPoint()
         self.is_dragging = False
+        self.pending_menu_action = None
+        self.close_menu_on_release = False
+        self.menu_visible = False
 
         # Animation state
         self.frame = 0
@@ -47,7 +96,10 @@ class NomzyDog(QWidget):
 
         # Movement state
         self.movement_state = "idle"
-        self.idle_ticks_remaining = random.randint(120, 400)
+        self.idle_ticks_remaining = self.random_setting_range(
+            "idle_min_ticks",
+            "idle_max_ticks",
+        )
         self.walk_ticks_remaining = 0
         self.walk_step_x = 0
         self.walk_step_y = 0
@@ -56,11 +108,10 @@ class NomzyDog(QWidget):
         # Speech state
         self.message = ""
         self.message_ticks_remaining = 0
-
-        # Timer runs every 40 ms.
-        # 1500 ticks ≈ 60 seconds
-        # 4500 ticks ≈ 180 seconds
-        self.speech_cooldown_ticks = random.randint(1500, 4500)
+        self.speech_cooldown_ticks = self.random_setting_range(
+            "speech_min_ticks",
+            "speech_max_ticks",
+        )
 
         self.messages = [
             "woof!",
@@ -75,18 +126,134 @@ class NomzyDog(QWidget):
             "tiny steps!",
         ]
 
-        # Click reaction state
         self.reaction_ticks_remaining = 0
-
         self.sprite_frames = self.load_sprite_frames()
 
+        # Main animation / behavior timer.
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.tick)
         self.timer.start(40)
 
+        # Re-assert always-on-top occasionally.
+        self.topmost_timer = QTimer(self)
+        self.topmost_timer.timeout.connect(self.enforce_always_on_top)
+        self.topmost_timer.start(1000)
+
+        # Save position every few seconds.
+        self.position_save_timer = QTimer(self)
+        self.position_save_timer.timeout.connect(self.save_state)
+        self.position_save_timer.start(5000)
+
+    def get_repo_root(self):
+        return Path(__file__).resolve().parents[2]
+
+    def load_settings(self):
+        settings_path = self.get_repo_root() / "config" / "settings.json"
+        settings = DEFAULT_SETTINGS.copy()
+
+        if settings_path.exists():
+            with open(settings_path, "r", encoding="utf-8") as file:
+                user_settings = json.load(file)
+            settings.update(user_settings)
+
+        return settings
+
+    def get_state_path(self):
+        return self.get_repo_root() / "config" / "state.json"
+
+    def load_state(self):
+        state_path = self.get_state_path()
+
+        if not state_path.exists():
+            return {}
+
+        try:
+            with open(state_path, "r", encoding="utf-8") as file:
+                return json.load(file)
+        except Exception:
+            return {}
+
+    def save_state(self):
+        if not self.settings.get("save_position", True):
+            return
+
+        state_path = self.get_state_path()
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+
+        scaled_sprite = self.get_scaled_sprite()
+        sprite_rect = self.get_sprite_rect(scaled_sprite)
+        sprite_center_global = self.mapToGlobal(sprite_rect.center())
+
+        state = {
+            "sprite_center_x": sprite_center_global.x(),
+            "sprite_center_y": sprite_center_global.y(),
+            "last_direction": self.last_direction,
+        }
+
+        try:
+            with open(state_path, "w", encoding="utf-8") as file:
+                json.dump(state, file, indent=2)
+        except Exception:
+            pass
+
+    def get_saved_position(self):
+        if not self.settings.get("save_position", True):
+            return None
+
+        state = self.load_state()
+
+        if "sprite_center_x" not in state or "sprite_center_y" not in state:
+            return None
+
+        self.last_direction = int(state.get("last_direction", 1))
+
+        desired_center = QPoint(
+            int(state["sprite_center_x"]),
+            int(state["sprite_center_y"]),
+        )
+
+        scaled_sprite = self.get_scaled_sprite()
+        sprite_rect = self.get_sprite_rect(
+            scaled_sprite,
+            force_message=False,
+            force_menu=False,
+        )
+
+        top_left = desired_center - sprite_rect.center()
+
+        return self.clamp_position_to_screen(top_left.x(), top_left.y())
+
+    def clamp_position_to_screen(self, x, y):
+        screen = QApplication.primaryScreen()
+        bounds = screen.availableGeometry()
+
+        clamped_x = max(
+            bounds.left(),
+            min(x, bounds.right() - self.width()),
+        )
+
+        clamped_y = max(
+            bounds.top(),
+            min(y, bounds.bottom() - self.height()),
+        )
+
+        return QPoint(clamped_x, clamped_y)
+
+    def closeEvent(self, event):
+        self.save_state()
+        event.accept()
+
+    def random_setting_range(self, min_key, max_key):
+        min_value = int(self.settings[min_key])
+        max_value = int(self.settings[max_key])
+
+        if min_value > max_value:
+            min_value, max_value = max_value, min_value
+
+        return random.randint(min_value, max_value)
+
     def load_sprite_frames(self):
-        repo_root = Path(__file__).resolve().parents[2]
-        sprite_path = repo_root / "assets" / "nomzy_sprite_sheet.png"
+        sprite_path = self.get_repo_root() / "assets" / "nomzy_sprite_sheet.png"
 
         if not sprite_path.exists():
             raise FileNotFoundError(
@@ -109,8 +276,7 @@ class NomzyDog(QWidget):
                 frame_width,
                 frame_height,
             )
-            cropped_frame = self.trim_transparent_space(raw_frame)
-            frames.append(cropped_frame)
+            frames.append(self.trim_transparent_space(raw_frame))
 
         return frames
 
@@ -154,14 +320,95 @@ class NomzyDog(QWidget):
     def tick(self):
         self.frame += 1
 
-        if not self.paused:
-            self.update_movement()
-            self.update_random_speech()
+        if not self.paused and not self.menu_visible:
+            if self.settings["movement_enabled"]:
+                self.update_movement()
+
+            if self.settings["speech_enabled"]:
+                self.update_random_speech()
 
         if self.reaction_ticks_remaining > 0:
             self.reaction_ticks_remaining -= 1
 
+        self.update_window_size_for_state()
         self.update()
+
+    def enforce_always_on_top(self):
+        if not self.settings.get("always_on_top", True):
+            return
+
+        if sys.platform.startswith("win"):
+            try:
+                hwnd = int(self.winId())
+
+                HWND_TOPMOST = -1
+                SWP_NOMOVE = 0x0002
+                SWP_NOSIZE = 0x0001
+                SWP_NOACTIVATE = 0x0010
+
+                ctypes.windll.user32.SetWindowPos(
+                    hwnd,
+                    HWND_TOPMOST,
+                    0,
+                    0,
+                    0,
+                    0,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+                )
+            except Exception:
+                pass
+        else:
+            self.raise_()
+
+    def update_window_size_for_state(self):
+        if self.menu_visible:
+            desired_width = self.menu_window_width
+            desired_height = self.menu_window_height
+            desired_message = False
+            desired_menu = True
+        elif self.message:
+            desired_width = self.speech_window_width
+            desired_height = self.speech_window_height
+            desired_message = True
+            desired_menu = False
+        else:
+            desired_width = self.base_window_width
+            desired_height = self.base_window_height
+            desired_message = False
+            desired_menu = False
+
+        if self.width() == desired_width and self.height() == desired_height:
+            return
+
+        current_menu_layout = (
+            self.width() == self.menu_window_width
+            and self.height() == self.menu_window_height
+        )
+        current_speech_layout = (
+            self.width() == self.speech_window_width
+            and self.height() == self.speech_window_height
+        )
+
+        scaled_sprite = self.get_scaled_sprite()
+
+        old_sprite_rect = self.get_sprite_rect(
+            scaled_sprite,
+            force_message=current_speech_layout,
+            force_menu=current_menu_layout,
+        )
+        old_sprite_center_global = self.mapToGlobal(old_sprite_rect.center())
+
+        self.setFixedSize(desired_width, desired_height)
+
+        new_sprite_rect = self.get_sprite_rect(
+            scaled_sprite,
+            force_message=desired_message,
+            force_menu=desired_menu,
+        )
+        new_top_left = old_sprite_center_global - new_sprite_rect.center()
+
+        self.move(new_top_left)
+        self.enforce_always_on_top()
 
     def update_random_speech(self):
         if self.message_ticks_remaining > 0:
@@ -178,15 +425,25 @@ class NomzyDog(QWidget):
             self.say_random_message()
 
     def say_random_message(self):
-        self.message = random.choice(self.messages)
+        self.say_message(random.choice(self.messages))
 
-        # Show message for about 3–5 seconds.
-        self.message_ticks_remaining = random.randint(75, 125)
+    def say_message(self, message):
+        self.menu_visible = False
+        self.message = message
 
-        # Talk roughly every 1–3 minutes.
-        self.speech_cooldown_ticks = random.randint(1500, 4500)
+        self.message_ticks_remaining = self.random_setting_range(
+            "speech_min_duration_ticks",
+            "speech_max_duration_ticks",
+        )
 
+        self.speech_cooldown_ticks = self.random_setting_range(
+            "speech_min_ticks",
+            "speech_max_ticks",
+        )
+
+        self.update_window_size_for_state()
         self.update()
+        self.enforce_always_on_top()
 
     def update_movement(self):
         if self.movement_state == "idle":
@@ -202,7 +459,11 @@ class NomzyDog(QWidget):
 
     def start_tiny_walk(self):
         self.movement_state = "walking"
-        self.walk_ticks_remaining = random.randint(10, 35)
+
+        self.walk_ticks_remaining = self.random_setting_range(
+            "walk_min_ticks",
+            "walk_max_ticks",
+        )
 
         possible_steps = [-1, 0, 1]
 
@@ -251,17 +512,24 @@ class NomzyDog(QWidget):
         self.walk_step_x = 0
         self.walk_step_y = 0
         self.walk_ticks_remaining = 0
-        self.idle_ticks_remaining = random.randint(120, 400)
+
+        self.idle_ticks_remaining = self.random_setting_range(
+            "idle_min_ticks",
+            "idle_max_ticks",
+        )
 
     def pet_nomzy(self):
-        # Clicking Nomzy gives a happy visual reaction but does not force speech.
         self.reaction_ticks_remaining = 35
 
         self.movement_state = "idle"
         self.walk_ticks_remaining = 0
         self.walk_step_x = 0
         self.walk_step_y = 0
-        self.idle_ticks_remaining = random.randint(160, 420)
+
+        self.idle_ticks_remaining = self.random_setting_range(
+            "idle_min_ticks",
+            "idle_max_ticks",
+        )
 
     def current_sprite(self):
         if self.paused:
@@ -274,19 +542,20 @@ class NomzyDog(QWidget):
             return self.sprite_frames[1]
 
         if self.movement_state == "idle":
-            # Mostly standing, with occasional blink/wag.
             if self.frame % 160 > 148:
                 return self.sprite_frames[1]
 
             return self.sprite_frames[0]
 
-        # Walking frames only while moving.
         return self.sprite_frames[2] if (self.frame // 8) % 2 == 0 else self.sprite_frames[3]
 
     def get_scaled_sprite(self):
         sprite = self.current_sprite()
 
-        target_size = QSize(110, 85)
+        target_size = QSize(
+            int(self.settings["sprite_width"]),
+            int(self.settings["sprite_height"]),
+        )
 
         return sprite.scaled(
             target_size,
@@ -294,15 +563,27 @@ class NomzyDog(QWidget):
             Qt.TransformationMode.FastTransformation,
         )
 
-    def get_sprite_rect(self, scaled_sprite):
-        x = (self.width() - scaled_sprite.width()) // 2
-        y = self.height() - scaled_sprite.height() - 8
+    def get_sprite_rect(self, scaled_sprite, force_message=None, force_menu=None):
+        has_message_layout = self.message if force_message is None else force_message
+        has_menu_layout = self.menu_visible if force_menu is None else force_menu
+
+        if has_menu_layout:
+            x = (self.width() - scaled_sprite.width()) // 2
+            y = (self.height() - scaled_sprite.height()) // 2
+        elif has_message_layout:
+            if self.last_direction >= 0:
+                x = 18
+            else:
+                x = self.width() - scaled_sprite.width() - 18
+
+            y = self.height() - scaled_sprite.height() - 8
+        else:
+            x = (self.width() - scaled_sprite.width()) // 2
+            y = self.height() - scaled_sprite.height() - 8
 
         return QRect(x, y, scaled_sprite.width(), scaled_sprite.height())
 
     def get_mouth_point(self, sprite_rect):
-        # Approximate mouth location based on the sprite's bounding box.
-        # The original sprite faces right.
         if self.last_direction >= 0:
             mouth_x = sprite_rect.left() + int(sprite_rect.width() * 0.86)
         else:
@@ -312,8 +593,214 @@ class NomzyDog(QWidget):
 
         return QPoint(mouth_x, mouth_y)
 
+    def get_speech_bubble_geometry(self, sprite_rect):
+        if not self.message:
+            return None, None
+
+        mouth = self.get_mouth_point(sprite_rect)
+
+        bubble_width = 125
+        bubble_height = 40
+        bubble_gap = 18
+        bubble_vertical_offset = 62
+
+        if self.last_direction >= 0:
+            bubble_rect = QRect(
+                mouth.x() + bubble_gap,
+                mouth.y() - bubble_vertical_offset,
+                bubble_width,
+                bubble_height,
+            )
+
+            tail = QPolygon(
+                [
+                    mouth,
+                    QPoint(bubble_rect.left() + 10, bubble_rect.bottom() - 8),
+                    QPoint(bubble_rect.left() + 26, bubble_rect.bottom() - 2),
+                ]
+            )
+        else:
+            bubble_rect = QRect(
+                mouth.x() - bubble_gap - bubble_width,
+                mouth.y() - bubble_vertical_offset,
+                bubble_width,
+                bubble_height,
+            )
+
+            tail = QPolygon(
+                [
+                    mouth,
+                    QPoint(bubble_rect.right() - 10, bubble_rect.bottom() - 8),
+                    QPoint(bubble_rect.right() - 26, bubble_rect.bottom() - 2),
+                ]
+            )
+
+        return bubble_rect, tail
+
+    def get_menu_buttons(self, sprite_rect):
+        if not self.menu_visible:
+            return []
+
+        center = sprite_rect.center()
+        radius = 102
+        button_radius = int(self.settings["menu_button_radius"])
+
+        pause_label = "Resume" if self.paused else "Pause"
+
+        top_items = [
+            ("hide", "Hide", 210),
+            ("pause", pause_label, 250),
+            ("reset", "Reset", 290),
+            ("quit", "Quit", 330),
+        ]
+
+        bottom_items = [
+            ("pet", "Pet", 30),
+            ("treat", "Treat", 70),
+            ("ball", "Ball", 110),
+            ("talk", "Talk", 150),
+        ]
+
+        buttons = []
+
+        for action, label, angle_degrees in top_items + bottom_items:
+            angle = math.radians(angle_degrees)
+            button_center_x = center.x() + int(radius * math.cos(angle))
+            button_center_y = center.y() + int(radius * math.sin(angle))
+
+            rect = QRect(
+                button_center_x - button_radius,
+                button_center_y - button_radius,
+                button_radius * 2,
+                button_radius * 2,
+            )
+
+            group = "top" if angle_degrees > 180 else "bottom"
+
+            buttons.append(
+                {
+                    "action": action,
+                    "label": label,
+                    "rect": rect,
+                    "group": group,
+                }
+            )
+
+        return buttons
+
+    def hit_menu_button(self, point):
+        scaled_sprite = self.get_scaled_sprite()
+        sprite_rect = self.get_sprite_rect(scaled_sprite)
+
+        for button in self.get_menu_buttons(sprite_rect):
+            if button["rect"].contains(point):
+                return button["action"]
+
+        return None
+
+    def point_is_on_sprite(self, point):
+        scaled_sprite = self.get_scaled_sprite()
+        sprite_rect = self.get_sprite_rect(scaled_sprite)
+        return sprite_rect.adjusted(-4, -4, 4, 4).contains(point)
+
+    def toggle_menu(self):
+        self.menu_visible = not self.menu_visible
+
+        if self.menu_visible:
+            self.message = ""
+            self.message_ticks_remaining = 0
+            self.movement_state = "idle"
+            self.walk_ticks_remaining = 0
+            self.walk_step_x = 0
+            self.walk_step_y = 0
+        else:
+            self.pending_menu_action = None
+            self.close_menu_on_release = False
+
+        self.update_window_size_for_state()
+        self.update()
+        self.enforce_always_on_top()
+
+    def close_menu(self):
+        if not self.menu_visible:
+            return
+
+        self.menu_visible = False
+        self.pending_menu_action = None
+        self.close_menu_on_release = False
+
+        self.update_window_size_for_state()
+        self.update()
+
+    def execute_menu_action(self, action):
+        self.close_menu()
+
+        if action == "hide":
+            self.hide_temporarily()
+        elif action == "pause":
+            self.toggle_pause()
+            self.say_message("paused" if self.paused else "back!")
+        elif action == "reset":
+            self.reset_position()
+            self.say_message("here!")
+        elif action == "quit":
+            QApplication.quit()
+        elif action == "pet":
+            self.pet_nomzy()
+            self.say_message("happy!")
+        elif action == "treat":
+            self.pet_nomzy()
+            self.say_message("nom nom!")
+        elif action == "ball":
+            self.pet_nomzy()
+            self.say_message("ball?!")
+        elif action == "talk":
+            self.say_random_message()
+
+    def hide_temporarily(self):
+        self.save_state()
+        self.hide()
+
+        # Temporary hide for safety until we add a real tray/menu-bar restore option.
+        QTimer.singleShot(10000, self.restore_after_temporary_hide)
+
+    def restore_after_temporary_hide(self):
+        self.show()
+        self.enforce_always_on_top()
+        self.say_message("back!")
+
+    def reset_position(self):
+        screen = QApplication.primaryScreen()
+        bounds = screen.availableGeometry()
+
+        scaled_sprite = self.get_scaled_sprite()
+        sprite_rect = self.get_sprite_rect(scaled_sprite)
+
+        desired_sprite_center = bounds.center()
+        new_top_left = desired_sprite_center - sprite_rect.center()
+
+        self.move(new_top_left)
+        self.enforce_always_on_top()
+
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
+            local_point = event.position().toPoint()
+
+            self.pending_menu_action = None
+            self.close_menu_on_release = False
+
+            if self.menu_visible:
+                self.pending_menu_action = self.hit_menu_button(local_point)
+
+                if self.pending_menu_action is not None:
+                    event.accept()
+                    return
+
+                if not self.point_is_on_sprite(local_point):
+                    self.close_menu_on_release = True
+                    event.accept()
+                    return
+
             self.drag_position = (
                 event.globalPosition().toPoint()
                 - self.frameGeometry().topLeft()
@@ -325,6 +812,10 @@ class NomzyDog(QWidget):
 
     def mouseMoveEvent(self, event):
         if event.buttons() == Qt.MouseButton.LeftButton:
+            if self.pending_menu_action is not None or self.close_menu_on_release:
+                event.accept()
+                return
+
             current_global = event.globalPosition().toPoint()
             moved_distance = (
                 current_global - self.mouse_press_global
@@ -338,8 +829,23 @@ class NomzyDog(QWidget):
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
+            if self.pending_menu_action is not None:
+                action = self.pending_menu_action
+                self.pending_menu_action = None
+                self.execute_menu_action(action)
+                event.accept()
+                return
+
+            if self.close_menu_on_release:
+                self.close_menu()
+                event.accept()
+                return
+
             if not self.is_dragging:
-                self.pet_nomzy()
+                local_point = event.position().toPoint()
+
+                if self.point_is_on_sprite(local_point):
+                    self.toggle_menu()
 
             self.is_dragging = False
             event.accept()
@@ -356,11 +862,15 @@ class NomzyDog(QWidget):
         speak_action = QAction("Say Something Now", self)
         speak_action.triggered.connect(self.say_random_message)
 
+        reset_action = QAction("Reset Position", self)
+        reset_action.triggered.connect(self.reset_position)
+
         quit_action = QAction("Quit Nomzy", self)
         quit_action.triggered.connect(QApplication.quit)
 
         menu.addAction(pause_action)
         menu.addAction(speak_action)
+        menu.addAction(reset_action)
         menu.addSeparator()
         menu.addAction(quit_action)
 
@@ -373,70 +883,26 @@ class NomzyDog(QWidget):
         if not self.message:
             return
 
+        bubble_rect, tail = self.get_speech_bubble_geometry(sprite_rect)
+
+        if bubble_rect is None or tail is None:
+            return
+
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        mouth = self.get_mouth_point(sprite_rect)
-
-        bubble_width = 125
-        bubble_height = 40
-        bubble_gap = 16
-        bubble_vertical_offset = 64
-
-        if self.last_direction >= 0:
-            # Bubble sits up-right from the mouth.
-            bubble_rect = QRect(
-                mouth.x() + bubble_gap,
-                mouth.y() - bubble_vertical_offset,
-                bubble_width,
-                bubble_height,
-            )
-
-            # Tail points directly to mouth.
-            tail = QPolygon(
-                [
-                    mouth,
-                    QPoint(bubble_rect.left() + 10, bubble_rect.bottom() - 8),
-                    QPoint(bubble_rect.left() + 26, bubble_rect.bottom() - 2),
-                ]
-            )
-        else:
-            # Bubble sits up-left from the mouth.
-            bubble_rect = QRect(
-                mouth.x() - bubble_gap - bubble_width,
-                mouth.y() - bubble_vertical_offset,
-                bubble_width,
-                bubble_height,
-            )
-
-            # Tail points directly to mouth.
-            tail = QPolygon(
-                [
-                    mouth,
-                    QPoint(bubble_rect.right() - 10, bubble_rect.bottom() - 8),
-                    QPoint(bubble_rect.right() - 26, bubble_rect.bottom() - 2),
-                ]
-            )
-
-        # Safety clamp so the bubble stays inside the transparent window.
-        if bubble_rect.left() < 6:
-            bubble_rect.moveLeft(6)
-
-        if bubble_rect.right() > self.width() - 6:
-            bubble_rect.moveRight(self.width() - 6)
-
-        if bubble_rect.top() < 6:
-            bubble_rect.moveTop(6)
-
-        # White and more transparent.
-        bubble_fill = QColor(255, 255, 255, 145)
+        bubble_fill = QColor(
+            255,
+            255,
+            255,
+            int(self.settings["speech_bubble_opacity"]),
+        )
         bubble_outline = QColor(170, 170, 170, 130)
         text_color = QColor(45, 45, 45, 225)
 
         painter.setPen(QPen(bubble_outline, 2))
         painter.setBrush(bubble_fill)
 
-        # Draw the tail first so the dog sprite can cover the mouth-side point.
         painter.drawPolygon(tail)
         painter.drawRoundedRect(bubble_rect, 12, 12)
 
@@ -447,6 +913,55 @@ class NomzyDog(QWidget):
             Qt.AlignmentFlag.AlignCenter,
             self.message,
         )
+
+        painter.restore()
+
+    def draw_menu(self, painter, sprite_rect):
+        if not self.menu_visible:
+            return
+
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        buttons = self.get_menu_buttons(sprite_rect)
+
+        # Soft guide arcs.
+        center = sprite_rect.center()
+        arc_radius = 102
+        arc_rect = QRect(
+            center.x() - arc_radius,
+            center.y() - arc_radius,
+            arc_radius * 2,
+            arc_radius * 2,
+        )
+
+        painter.setPen(QPen(QColor(255, 255, 255, 70), 5))
+        painter.drawArc(arc_rect, 200 * 16, 140 * 16)
+        painter.drawArc(arc_rect, 20 * 16, 140 * 16)
+
+        for button in buttons:
+            rect = button["rect"]
+            label = button["label"]
+            group = button["group"]
+
+            if group == "top":
+                fill = QColor(245, 238, 255, 220)
+                outline = QColor(155, 130, 190, 210)
+            else:
+                fill = QColor(255, 246, 230, 220)
+                outline = QColor(205, 150, 90, 210)
+
+            painter.setPen(QPen(outline, 2))
+            painter.setBrush(fill)
+            painter.drawEllipse(rect)
+
+            painter.setPen(QColor(45, 45, 45, 235))
+            painter.setFont(QFont("Arial", 8, QFont.Weight.Bold))
+            painter.drawText(
+                rect,
+                Qt.AlignmentFlag.AlignCenter,
+                label,
+            )
 
         painter.restore()
 
@@ -477,7 +992,11 @@ class NomzyDog(QWidget):
         scaled_sprite = self.get_scaled_sprite()
         sprite_rect = self.get_sprite_rect(scaled_sprite)
 
-        self.draw_speech_bubble(painter, sprite_rect)
+        if self.menu_visible:
+            self.draw_menu(painter, sprite_rect)
+        else:
+            self.draw_speech_bubble(painter, sprite_rect)
+
         self.draw_nomzy_sprite(painter, scaled_sprite, sprite_rect)
 
 
@@ -485,15 +1004,23 @@ def main():
     app = QApplication(sys.argv)
 
     nomzy = NomzyDog()
+    app.aboutToQuit.connect(nomzy.save_state)
 
-    screen = QApplication.primaryScreen()
-    bounds = screen.availableGeometry()
+    saved_position = nomzy.get_saved_position()
 
-    start_x = bounds.center().x()
-    start_y = bounds.center().y()
+    if saved_position is not None:
+        nomzy.move(saved_position)
+    else:
+        screen = QApplication.primaryScreen()
+        bounds = screen.availableGeometry()
 
-    nomzy.move(start_x, start_y)
+        start_x = bounds.center().x()
+        start_y = bounds.center().y()
+
+        nomzy.move(start_x, start_y)
+
     nomzy.show()
+    nomzy.enforce_always_on_top()
 
     sys.exit(app.exec())
 

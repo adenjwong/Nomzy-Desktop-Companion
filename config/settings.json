@@ -1,0 +1,28 @@
+{
+  "window_width": 360,
+  "window_height": 190,
+
+  "menu_window_width": 360,
+  "menu_window_height": 300,
+  "menu_button_radius": 24,
+
+  "sprite_width": 110,
+  "sprite_height": 85,
+
+  "always_on_top": true,
+  "save_position": true,
+
+  "movement_enabled": true,
+  "idle_min_ticks": 120,
+  "idle_max_ticks": 400,
+  "walk_min_ticks": 10,
+  "walk_max_ticks": 35,
+
+  "speech_enabled": true,
+  "speech_min_ticks": 1500,
+  "speech_max_ticks": 4500,
+  "speech_min_duration_ticks": 75,
+  "speech_max_duration_ticks": 125,
+
+  "speech_bubble_opacity": 145
+}

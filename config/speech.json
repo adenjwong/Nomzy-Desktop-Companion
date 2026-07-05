@@ -1,0 +1,55 @@
+{
+  "idle": [
+    "woof!",
+    "hi!",
+    "still here!",
+    "good job!",
+    "sniff sniff",
+    "tail wag!",
+    "hmm...",
+    "doing great!",
+    "hello!",
+    "tiny steps!"
+  ],
+  "talk": [
+    "hello!",
+    "woof!",
+    "I'm here!",
+    "what's up?",
+    "tiny dog thoughts..."
+  ],
+  "pet": [
+    "happy!",
+    "tail wag!",
+    "again!",
+    "hehe!"
+  ],
+  "treat": [
+    "nom nom!",
+    "snack!",
+    "thank you!",
+    "treat!"
+  ],
+  "ball": [
+    "ball?!",
+    "throw it!",
+    "again again!",
+    "I saw it!"
+  ],
+  "pause": [
+    "paused",
+    "I'll wait!"
+  ],
+  "resume": [
+    "back!",
+    "let's go!"
+  ],
+  "reset": [
+    "here!",
+    "I'm back!"
+  ],
+  "hide_return": [
+    "back!",
+    "hello again!"
+  ]
+}

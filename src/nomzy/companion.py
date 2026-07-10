@@ -1,4 +1,3 @@
-import ctypes
 import math
 import random
 import sys
@@ -12,9 +11,11 @@ from PySide6.QtGui import (
     QPen,
     QPixmap,
     QPolygon,
+    QRegion,
 )
 from PySide6.QtWidgets import QApplication, QMenu, QWidget
 
+from .macos_overlay import configure_macos_overlay_window, is_macos
 from .settings import load_settings
 from .speech import choose_speech, load_speech
 from .sprites import load_sprite_frames
@@ -41,10 +42,17 @@ class NomzyDog(QWidget):
 
         self.setFixedSize(self.base_window_width, self.base_window_height)
 
-        window_flags = Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool
+        window_flags = (
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.Tool
+            | Qt.WindowType.BypassWindowManagerHint
+        )
 
-        if self.settings["always_on_top"]:
+        if self.settings.get("always_on_top", True):
             window_flags |= Qt.WindowType.WindowStaysOnTopHint
+
+        if self.settings.get("prevent_focus_steal", True):
+            window_flags |= Qt.WindowType.WindowDoesNotAcceptFocus
 
         self.setWindowFlags(window_flags)
 
@@ -94,6 +102,33 @@ class NomzyDog(QWidget):
         self.position_save_timer = QTimer(self)
         self.position_save_timer.timeout.connect(self.save_state)
         self.position_save_timer.start(5000)
+
+        self.mask_timer = QTimer(self)
+        self.mask_timer.timeout.connect(self.update_overlay_mask)
+        self.mask_timer.start(120)
+
+        self.native_overlay_timer = QTimer(self)
+        self.native_overlay_timer.timeout.connect(self.apply_native_overlay_style)
+        self.native_overlay_timer.start(1500)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.apply_native_overlay_style()
+        self.update_overlay_mask()
+        self.enforce_always_on_top()
+
+    def apply_native_overlay_style(self):
+        if not self.settings.get("native_macos_overlay_enabled", True):
+            return
+
+        if not is_macos():
+            return
+
+        configure_macos_overlay_window(
+            self,
+            window_level=str(self.settings.get("macos_window_level", "floating")),
+            prevent_activation=bool(self.settings.get("prevent_focus_steal", True)),
+        )
 
     def save_state(self):
         if not self.settings.get("save_position", True):
@@ -181,34 +216,65 @@ class NomzyDog(QWidget):
             self.reaction_ticks_remaining -= 1
 
         self.update_window_size_for_state()
+        self.update_overlay_mask()
         self.update()
 
     def enforce_always_on_top(self):
         if not self.settings.get("always_on_top", True):
             return
 
-        if sys.platform.startswith("win"):
-            try:
-                hwnd = int(self.winId())
+        if is_macos():
+            self.apply_native_overlay_style()
+            return
 
-                HWND_TOPMOST = -1
-                SWP_NOMOVE = 0x0002
-                SWP_NOSIZE = 0x0001
-                SWP_NOACTIVATE = 0x0010
+        self.raise_()
 
-                ctypes.windll.user32.SetWindowPos(
-                    hwnd,
-                    HWND_TOPMOST,
-                    0,
-                    0,
-                    0,
-                    0,
-                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+    def update_overlay_mask(self):
+        if not self.settings.get("overlay_mode_enabled", True):
+            self.clearMask()
+            return
+
+        if not self.settings.get("overlay_mask_enabled", True):
+            self.clearMask()
+            return
+
+        scaled_sprite = self.get_scaled_sprite()
+        sprite_rect = self.get_sprite_rect(scaled_sprite)
+
+        padding = int(self.settings.get("sprite_click_padding", 8))
+
+        region = QRegion(
+            sprite_rect.adjusted(
+                -padding,
+                -padding,
+                padding,
+                padding,
+            )
+        )
+
+        if self.menu_visible:
+            for button in self.get_menu_buttons(sprite_rect):
+                button_region = QRegion(
+                    button["rect"],
+                    QRegion.RegionType.Ellipse,
                 )
-            except Exception:
-                pass
-        else:
-            self.raise_()
+                region = region.united(button_region)
+
+        if self.message and self.settings.get("speech_bubble_blocks_input", True):
+            bubble_rect, tail = self.get_speech_bubble_geometry(sprite_rect)
+
+            if bubble_rect is not None:
+                bubble_region = QRegion(
+                    bubble_rect.adjusted(-3, -3, 3, 3),
+                    QRegion.RegionType.Rectangle,
+                )
+                region = region.united(bubble_region)
+
+            if tail is not None:
+                tail_region = QRegion(tail)
+                region = region.united(tail_region)
+
+        self.setMask(region)
 
     def update_window_size_for_state(self):
         if self.menu_visible:
@@ -248,6 +314,7 @@ class NomzyDog(QWidget):
         )
         old_sprite_center_global = self.mapToGlobal(old_sprite_rect.center())
 
+        self.clearMask()
         self.setFixedSize(desired_width, desired_height)
 
         new_sprite_rect = self.get_sprite_rect(
@@ -258,6 +325,8 @@ class NomzyDog(QWidget):
         new_top_left = old_sprite_center_global - new_sprite_rect.center()
 
         self.move(new_top_left)
+        self.update_overlay_mask()
+        self.apply_native_overlay_style()
         self.enforce_always_on_top()
 
     def update_random_speech(self):
@@ -293,6 +362,7 @@ class NomzyDog(QWidget):
         )
 
         self.update_window_size_for_state()
+        self.update_overlay_mask()
         self.update()
         self.enforce_always_on_top()
 
@@ -437,6 +507,18 @@ class NomzyDog(QWidget):
 
         return QRect(x, y, scaled_sprite.width(), scaled_sprite.height())
 
+    def point_is_on_sprite(self, point):
+        scaled_sprite = self.get_scaled_sprite()
+        sprite_rect = self.get_sprite_rect(scaled_sprite)
+
+        padding = int(self.settings.get("sprite_click_padding", 8))
+        return sprite_rect.adjusted(
+            -padding,
+            -padding,
+            padding,
+            padding,
+        ).contains(point)
+
     def get_mouth_point(self, sprite_rect):
         if self.last_direction >= 0:
             mouth_x = sprite_rect.left() + int(sprite_rect.width() * 0.86)
@@ -496,7 +578,7 @@ class NomzyDog(QWidget):
             return []
 
         center = sprite_rect.center()
-        radius = 102
+        radius = int(self.settings.get("menu_arc_radius", 102))
         button_radius = int(self.settings["menu_button_radius"])
 
         pause_label = "Resume" if self.paused else "Pause"
@@ -552,12 +634,6 @@ class NomzyDog(QWidget):
 
         return None
 
-    def point_is_on_sprite(self, point):
-        scaled_sprite = self.get_scaled_sprite()
-        sprite_rect = self.get_sprite_rect(scaled_sprite)
-
-        return sprite_rect.adjusted(-4, -4, 4, 4).contains(point)
-
     def toggle_menu(self):
         self.menu_visible = not self.menu_visible
 
@@ -573,6 +649,7 @@ class NomzyDog(QWidget):
             self.close_menu_on_release = False
 
         self.update_window_size_for_state()
+        self.update_overlay_mask()
         self.update()
         self.enforce_always_on_top()
 
@@ -585,6 +662,7 @@ class NomzyDog(QWidget):
         self.close_menu_on_release = False
 
         self.update_window_size_for_state()
+        self.update_overlay_mask()
         self.update()
 
     def execute_menu_action(self, action):
@@ -625,6 +703,8 @@ class NomzyDog(QWidget):
 
     def restore_after_temporary_hide(self):
         self.show()
+        self.update_overlay_mask()
+        self.apply_native_overlay_style()
         self.enforce_always_on_top()
         self.say_random_speech("hide_return")
 
@@ -639,6 +719,7 @@ class NomzyDog(QWidget):
         new_top_left = desired_sprite_center - sprite_rect.center()
 
         self.move(new_top_left)
+        self.update_overlay_mask()
         self.enforce_always_on_top()
 
     def mousePressEvent(self, event):
@@ -668,7 +749,6 @@ class NomzyDog(QWidget):
             self.mouse_press_global = event.globalPosition().toPoint()
             self.is_dragging = False
             event.accept()
-
     def mouseMoveEvent(self, event):
         if event.buttons() == Qt.MouseButton.LeftButton:
             if self.pending_menu_action is not None or self.close_menu_on_release:
@@ -783,19 +863,6 @@ class NomzyDog(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         buttons = self.get_menu_buttons(sprite_rect)
-
-        center = sprite_rect.center()
-        arc_radius = 102
-        arc_rect = QRect(
-            center.x() - arc_radius,
-            center.y() - arc_radius,
-            arc_radius * 2,
-            arc_radius * 2,
-        )
-
-        painter.setPen(QPen(QColor(255, 255, 255, 70), 5))
-        painter.drawArc(arc_rect, 200 * 16, 140 * 16)
-        painter.drawArc(arc_rect, 20 * 16, 140 * 16)
 
         for button in buttons:
             rect = button["rect"]

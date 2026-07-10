@@ -5,12 +5,23 @@
   "menu_window_width": 360,
   "menu_window_height": 300,
   "menu_button_radius": 24,
+  "menu_arc_radius": 102,
 
   "sprite_width": 110,
   "sprite_height": 85,
 
   "always_on_top": true,
   "save_position": true,
+
+  "native_macos_overlay_enabled": true,
+  "macos_hide_dock_icon": true,
+  "macos_window_level": "status",
+  "prevent_focus_steal": true,
+
+  "overlay_mode_enabled": true,
+  "overlay_mask_enabled": true,
+  "sprite_click_padding": 8,
+  "speech_bubble_blocks_input": true,
 
   "movement_enabled": true,
   "idle_min_ticks": 120,

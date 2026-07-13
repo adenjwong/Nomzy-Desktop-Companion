@@ -384,12 +384,23 @@ class NomzyDog(QWidget):
         self.say_message(self.personalize_speech(message))
 
     def personalize_speech(self, message: str) -> str:
+        return message.replace("{name}", self.get_household_name())
+
+    def get_household_name(self) -> str:
         user_name = str(self.settings.get("user_name", "")).strip()
 
-        if not user_name:
-            user_name = "friend"
+        little_names = {
+            "aden": "dad",
+            "ethney": "mom",
+        }
 
-        return message.replace("{name}", user_name)
+        if user_name.casefold() in little_names:
+            return little_names[user_name.casefold()]
+
+        if user_name:
+            return user_name
+
+        return "friend"
 
     def say_message(self, message):
         self.menu_visible = False
@@ -746,7 +757,7 @@ class NomzyDog(QWidget):
                 on_save=self.apply_updated_settings,
             )
         else:
-            self.settings_window.settings = dict(self.settings)
+            self.settings_window.load_values(self.settings)
 
         self.settings_window.show()
         self.settings_window.raise_()

@@ -1,6 +1,5 @@
 import math
 import random
-import sys
 
 from PySide6.QtCore import QPoint, QRect, QSize, QTimer, Qt
 from PySide6.QtGui import (
@@ -17,6 +16,7 @@ from PySide6.QtWidgets import QApplication, QMenu, QWidget
 
 from .macos_overlay import configure_macos_overlay_window, is_macos
 from .settings import load_settings
+from .settings_window import NomzySettingsWindow
 from .speech import choose_speech, load_speech
 from .sprites import load_sprite_frames
 from .state import load_state, save_state as write_state
@@ -30,16 +30,9 @@ class NomzyDog(QWidget):
 
         self.settings = load_settings()
         self.speech = load_speech()
+        self.settings_window = None
 
-        self.base_window_width = int(self.settings["sprite_width"]) + 30
-        self.base_window_height = int(self.settings["sprite_height"]) + 30
-
-        self.speech_window_width = int(self.settings["window_width"])
-        self.speech_window_height = int(self.settings["window_height"])
-
-        self.menu_window_width = int(self.settings["menu_window_width"])
-        self.menu_window_height = int(self.settings["menu_window_height"])
-
+        self.recalculate_window_dimensions()
         self.setFixedSize(self.base_window_width, self.base_window_height)
 
         window_flags = (
@@ -111,6 +104,16 @@ class NomzyDog(QWidget):
         self.native_overlay_timer.timeout.connect(self.apply_native_overlay_style)
         self.native_overlay_timer.start(1500)
 
+    def recalculate_window_dimensions(self):
+        self.base_window_width = int(self.settings["sprite_width"]) + 30
+        self.base_window_height = int(self.settings["sprite_height"]) + 30
+
+        self.speech_window_width = int(self.settings["window_width"])
+        self.speech_window_height = int(self.settings["window_height"])
+
+        self.menu_window_width = int(self.settings["menu_window_width"])
+        self.menu_window_height = int(self.settings["menu_window_height"])
+
     def showEvent(self, event):
         super().showEvent(event)
         self.apply_native_overlay_style()
@@ -126,7 +129,7 @@ class NomzyDog(QWidget):
 
         configure_macos_overlay_window(
             self,
-            window_level=str(self.settings.get("macos_window_level", "floating")),
+            window_level=str(self.settings.get("macos_window_level", "status")),
             prevent_activation=bool(self.settings.get("prevent_focus_steal", True)),
         )
 
@@ -326,7 +329,40 @@ class NomzyDog(QWidget):
 
         self.move(new_top_left)
         self.update_overlay_mask()
-        self.apply_native_overlay_style()
+        self.enforce_always_on_top()
+
+    def apply_updated_settings(self, updated_settings: dict):
+        old_scaled_sprite = self.get_scaled_sprite()
+        old_sprite_rect = self.get_sprite_rect(old_scaled_sprite)
+        old_sprite_center_global = self.mapToGlobal(old_sprite_rect.center())
+
+        self.settings = dict(updated_settings)
+        self.recalculate_window_dimensions()
+
+        self.speech_cooldown_ticks = min(
+            self.speech_cooldown_ticks,
+            int(self.settings["speech_max_ticks"]),
+        )
+
+        desired_width = self.base_window_width
+        desired_height = self.base_window_height
+
+        if self.menu_visible:
+            desired_width = self.menu_window_width
+            desired_height = self.menu_window_height
+        elif self.message:
+            desired_width = self.speech_window_width
+            desired_height = self.speech_window_height
+
+        self.clearMask()
+        self.setFixedSize(desired_width, desired_height)
+
+        new_scaled_sprite = self.get_scaled_sprite()
+        new_sprite_rect = self.get_sprite_rect(new_scaled_sprite)
+        self.move(old_sprite_center_global - new_sprite_rect.center())
+
+        self.update_overlay_mask()
+        self.update()
         self.enforce_always_on_top()
 
     def update_random_speech(self):
@@ -345,7 +381,15 @@ class NomzyDog(QWidget):
 
     def say_random_speech(self, category="idle"):
         message = choose_speech(self.speech, category)
-        self.say_message(message)
+        self.say_message(self.personalize_speech(message))
+
+    def personalize_speech(self, message: str) -> str:
+        user_name = str(self.settings.get("user_name", "")).strip()
+
+        if not user_name:
+            user_name = "friend"
+
+        return message.replace("{name}", user_name)
 
     def say_message(self, message):
         self.menu_visible = False
@@ -584,7 +628,7 @@ class NomzyDog(QWidget):
         pause_label = "Resume" if self.paused else "Pause"
 
         top_items = [
-            ("hide", "Hide", 210),
+            ("settings", "Settings", 210),
             ("pause", pause_label, 250),
             ("reset", "Reset", 290),
             ("quit", "Quit", 330),
@@ -668,8 +712,8 @@ class NomzyDog(QWidget):
     def execute_menu_action(self, action):
         self.close_menu()
 
-        if action == "hide":
-            self.hide_temporarily()
+        if action == "settings":
+            self.open_settings_window()
         elif action == "pause":
             self.toggle_pause()
 
@@ -695,18 +739,18 @@ class NomzyDog(QWidget):
         elif action == "talk":
             self.say_random_speech("talk")
 
-    def hide_temporarily(self):
-        self.save_state()
-        self.hide()
+    def open_settings_window(self):
+        if self.settings_window is None:
+            self.settings_window = NomzySettingsWindow(
+                settings=self.settings,
+                on_save=self.apply_updated_settings,
+            )
+        else:
+            self.settings_window.settings = dict(self.settings)
 
-        QTimer.singleShot(10000, self.restore_after_temporary_hide)
-
-    def restore_after_temporary_hide(self):
-        self.show()
-        self.update_overlay_mask()
-        self.apply_native_overlay_style()
-        self.enforce_always_on_top()
-        self.say_random_speech("hide_return")
+        self.settings_window.show()
+        self.settings_window.raise_()
+        self.settings_window.activateWindow()
 
     def reset_position(self):
         screen = QApplication.primaryScreen()
@@ -749,6 +793,7 @@ class NomzyDog(QWidget):
             self.mouse_press_global = event.globalPosition().toPoint()
             self.is_dragging = False
             event.accept()
+
     def mouseMoveEvent(self, event):
         if event.buttons() == Qt.MouseButton.LeftButton:
             if self.pending_menu_action is not None or self.close_menu_on_release:
@@ -792,6 +837,9 @@ class NomzyDog(QWidget):
     def contextMenuEvent(self, event):
         menu = QMenu(self)
 
+        settings_action = QAction("Settings", self)
+        settings_action.triggered.connect(self.open_settings_window)
+
         pause_action = QAction(
             "Resume Nomzy" if self.paused else "Pause Nomzy",
             self,
@@ -807,6 +855,7 @@ class NomzyDog(QWidget):
         quit_action = QAction("Quit Nomzy", self)
         quit_action.triggered.connect(QApplication.quit)
 
+        menu.addAction(settings_action)
         menu.addAction(pause_action)
         menu.addAction(speak_action)
         menu.addAction(reset_action)

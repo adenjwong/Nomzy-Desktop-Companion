@@ -16,6 +16,7 @@ from nomzy.macos_overlay import configure_macos_application  # noqa: E402
 
 def main():
     app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
 
     configure_macos_application(hide_dock_icon=True)
 

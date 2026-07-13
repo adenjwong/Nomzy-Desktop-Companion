@@ -15,6 +15,8 @@ DEFAULT_SETTINGS = {
     "sprite_width": 110,
     "sprite_height": 85,
 
+    "user_name": "",
+
     "always_on_top": True,
     "save_position": True,
 
@@ -62,3 +64,14 @@ def load_settings() -> dict:
         pass
 
     return settings
+
+
+def save_settings(settings: dict) -> None:
+    settings_path = get_settings_path()
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+
+    clean_settings = DEFAULT_SETTINGS.copy()
+    clean_settings.update(settings)
+
+    with open(settings_path, "w", encoding="utf-8") as file:
+        json.dump(clean_settings, file, indent=2)

@@ -7,9 +7,9 @@ from .paths import get_speech_path
 DEFAULT_SPEECH = {
     "idle": [
         "woof!",
-        "hi!",
+        "hi, {name}!",
         "still here!",
-        "good job!",
+        "good job, {name}!",
         "sniff sniff",
         "tail wag!",
         "hmm...",
@@ -18,7 +18,7 @@ DEFAULT_SPEECH = {
         "tiny steps!",
     ],
     "talk": [
-        "hello!",
+        "hello, {name}!",
         "woof!",
         "I'm here!",
         "what's up?",
@@ -29,11 +29,12 @@ DEFAULT_SPEECH = {
         "tail wag!",
         "again!",
         "hehe!",
+        "thanks, {name}!",
     ],
     "treat": [
         "nom nom!",
         "snack!",
-        "thank you!",
+        "thank you, {name}!",
         "treat!",
     ],
     "ball": [

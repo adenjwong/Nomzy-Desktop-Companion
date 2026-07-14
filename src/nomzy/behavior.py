@@ -1,4 +1,5 @@
 import random
+from math import ceil
 
 from PySide6.QtWidgets import QApplication
 
@@ -50,6 +51,7 @@ class CompanionBehaviorMixin:
     def say_message(self, message):
         self.menu_visible = False
         self.message = message
+        self.talk_animation_pending = True
         self.message_ticks_remaining = self.random_setting_range(
             "speech_min_duration_ticks",
             "speech_max_duration_ticks",
@@ -58,6 +60,7 @@ class CompanionBehaviorMixin:
             "speech_min_ticks",
             "speech_max_ticks",
         )
+        self.update_animation(0)
         self.update_window_size_for_state()
         self.update_overlay_mask()
         self.update()
@@ -127,8 +130,7 @@ class CompanionBehaviorMixin:
             "idle_max_ticks",
         )
 
-    def pet_nomzy(self):
-        self.reaction_ticks_remaining = 35
+    def pet_nomzy(self, animation_name="pet"):
         self.movement_state = "idle"
         self.walk_ticks_remaining = 0
         self.walk_step_x = 0
@@ -137,3 +139,75 @@ class CompanionBehaviorMixin:
             "idle_min_ticks",
             "idle_max_ticks",
         )
+        self.start_reaction(animation_name)
+
+    def random_blink_cooldown(self):
+        min_interval = int(self.settings.get("blink_min_interval_ms", 2200))
+        max_interval = int(self.settings.get("blink_max_interval_ms", 6500))
+
+        if min_interval > max_interval:
+            min_interval, max_interval = max_interval, min_interval
+
+        return random.randint(max(1, min_interval), max(1, max_interval))
+
+    def start_reaction(self, animation_name):
+        if animation_name not in self.animation_player.clips:
+            animation_name = "pet"
+
+        self.active_reaction = animation_name
+        self.ambient_animation = None
+        clip = self.animation_player.clips[animation_name]
+        self.reaction_ticks_remaining = ceil(clip.duration_ms / 40)
+        self.animation_player.play(animation_name, restart=True)
+
+    def update_animation(self, elapsed_ms):
+        player = self.animation_player
+
+        if player.finished:
+            if self.active_reaction == player.clip_name:
+                self.active_reaction = None
+                self.reaction_ticks_remaining = 0
+            if self.ambient_animation == player.clip_name:
+                self.ambient_animation = None
+
+        idle_can_blink = (
+            not self.paused
+            and not self.menu_visible
+            and not self.message
+            and self.movement_state == "idle"
+            and self.active_reaction is None
+        )
+
+        if idle_can_blink:
+            self.blink_cooldown_ms -= elapsed_ms
+            if self.blink_cooldown_ms <= 0 and self.ambient_animation is None:
+                self.ambient_animation = "blink"
+                self.blink_cooldown_ms = self.random_blink_cooldown()
+        else:
+            self.ambient_animation = None
+
+        if self.paused or self.menu_visible:
+            desired_animation = "paused"
+        elif self.active_reaction is not None:
+            desired_animation = self.active_reaction
+        elif self.message:
+            desired_animation = "talk"
+        elif self.movement_state == "walking":
+            desired_animation = "walk"
+        elif self.ambient_animation is not None:
+            desired_animation = self.ambient_animation
+        else:
+            desired_animation = "idle"
+
+        restart_talk = (
+            desired_animation == "talk" and self.talk_animation_pending
+        )
+        player.play(desired_animation, restart=restart_talk)
+
+        if desired_animation == "talk":
+            self.talk_animation_pending = False
+
+        player.advance(elapsed_ms)
+
+        if self.reaction_ticks_remaining > 0:
+            self.reaction_ticks_remaining -= 1

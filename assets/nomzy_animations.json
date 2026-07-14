@@ -1,0 +1,72 @@
+{
+  "sheet": "nomzy_sprite_sheet.png",
+  "grid": {
+    "columns": 4,
+    "rows": 1
+  },
+  "anchor": {
+    "x": 0.5,
+    "y": 1.0
+  },
+  "clips": {
+    "idle": {
+      "loop": true,
+      "frames": [
+        {"sprite": 0, "duration_ms": 1000}
+      ]
+    },
+    "blink": {
+      "loop": false,
+      "frames": [
+        {"sprite": 0, "duration_ms": 70},
+        {"sprite": 1, "duration_ms": 110},
+        {"sprite": 0, "duration_ms": 70}
+      ]
+    },
+    "walk": {
+      "loop": true,
+      "frames": [
+        {"sprite": 0, "duration_ms": 650},
+        {"sprite": 2, "duration_ms": 100},
+        {"sprite": 0, "duration_ms": 650},
+        {"sprite": 3, "duration_ms": 100}
+      ]
+    },
+    "talk": {
+      "loop": false,
+      "frames": [
+        {"sprite": 0, "duration_ms": 180},
+        {"sprite": 1, "duration_ms": 90},
+        {"sprite": 0, "duration_ms": 180},
+        {"sprite": 1, "duration_ms": 90},
+        {"sprite": 0, "duration_ms": 180},
+        {"sprite": 1, "duration_ms": 90},
+        {"sprite": 0, "duration_ms": 180}
+      ]
+    },
+    "pet": {
+      "loop": false,
+      "frames": [
+        {"sprite": 1, "duration_ms": 600}
+      ]
+    },
+    "treat": {
+      "loop": false,
+      "frames": [
+        {"sprite": 1, "duration_ms": 600}
+      ]
+    },
+    "ball": {
+      "loop": false,
+      "frames": [
+        {"sprite": 1, "duration_ms": 600}
+      ]
+    },
+    "paused": {
+      "loop": true,
+      "frames": [
+        {"sprite": 0, "duration_ms": 1000}
+      ]
+    }
+  }
+}

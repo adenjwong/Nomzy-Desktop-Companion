@@ -41,13 +41,7 @@ class CompanionRenderingMixin:
         self.setMask(region)
 
     def current_sprite(self) -> QPixmap:
-        if self.paused:
-            return self.sprite_frames[0]
-        if self.reaction_ticks_remaining > 0 or self.message:
-            return self.sprite_frames[1]
-        if self.movement_state == "idle":
-            return self.sprite_frames[1] if self.frame % 160 > 148 else self.sprite_frames[0]
-        return self.sprite_frames[2] if (self.frame // 8) % 2 == 0 else self.sprite_frames[3]
+        return self.sprite_frames[self.animation_player.frame.sprite]
 
     def get_scaled_sprite(self) -> QPixmap:
         target_size = QSize(
@@ -65,14 +59,21 @@ class CompanionRenderingMixin:
         has_menu_layout = self.menu_visible if force_menu is None else force_menu
 
         if has_menu_layout:
-            x = (self.width() - scaled_sprite.width()) // 2
-            y = (self.height() - scaled_sprite.height()) // 2
+            anchor_x = self.width() / 2
+            anchor_y = self.height() / 2 + scaled_sprite.height() * (
+                self.sprite_anchor_y - 0.5
+            )
+            x = round(anchor_x - scaled_sprite.width() * self.sprite_anchor_x)
+            y = round(anchor_y - scaled_sprite.height() * self.sprite_anchor_y)
         elif has_message_layout:
             x = 18 if self.last_direction >= 0 else self.width() - scaled_sprite.width() - 18
-            y = self.height() - scaled_sprite.height() - 8
+            anchor_y = self.height() - 8
+            y = round(anchor_y - scaled_sprite.height() * self.sprite_anchor_y)
         else:
-            x = (self.width() - scaled_sprite.width()) // 2
-            y = self.height() - scaled_sprite.height() - 8
+            anchor_x = self.width() / 2
+            anchor_y = self.height() - 8
+            x = round(anchor_x - scaled_sprite.width() * self.sprite_anchor_x)
+            y = round(anchor_y - scaled_sprite.height() * self.sprite_anchor_y)
 
         return QRect(x, y, scaled_sprite.width(), scaled_sprite.height())
 

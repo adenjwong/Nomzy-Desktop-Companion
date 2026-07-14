@@ -1,75 +1,103 @@
-from PySide6.QtCore import QRect
-from PySide6.QtGui import QImage, QPixmap
+import json
+from dataclasses import dataclass
 
-from .paths import get_sprite_sheet_path
+from PySide6.QtGui import QPixmap
+
+from .animation import AnimationClip, AnimationFrame
+from .paths import get_animation_manifest_path, get_assets_dir
 
 
-def load_sprite_frames() -> list[QPixmap]:
-    sprite_path = get_sprite_sheet_path()
+@dataclass(frozen=True)
+class SpriteAssets:
+    frames: tuple[QPixmap, ...]
+    clips: dict[str, AnimationClip]
+    anchor_x: float
+    anchor_y: float
 
-    if not sprite_path.exists():
-        raise FileNotFoundError(
-            f"Missing sprite sheet: {sprite_path}\n"
-            "Expected file location: assets/nomzy_sprite_sheet.png"
-        )
 
-    sheet = QPixmap(str(sprite_path))
+def load_sprite_assets() -> SpriteAssets:
+    manifest_path = get_animation_manifest_path()
 
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"Missing animation manifest: {manifest_path}")
+
+    with open(manifest_path, "r", encoding="utf-8") as file:
+        manifest = json.load(file)
+
+    sheet_path = get_assets_dir() / str(manifest["sheet"])
+    if not sheet_path.exists():
+        raise FileNotFoundError(f"Missing sprite sheet: {sheet_path}")
+
+    sheet = QPixmap(str(sheet_path))
     if sheet.isNull():
-        raise RuntimeError(f"Could not load sprite sheet: {sprite_path}")
+        raise RuntimeError(f"Could not load sprite sheet: {sheet_path}")
 
-    frame_count = 4
-    frame_width = sheet.width() // frame_count
-    frame_height = sheet.height()
+    columns = max(1, int(manifest["grid"]["columns"]))
+    rows = max(1, int(manifest["grid"]["rows"]))
+    frames = _slice_sprite_sheet(sheet, columns, rows)
+    clips = _load_clips(manifest["clips"], len(frames))
+    anchor = manifest.get("anchor", {})
 
+    return SpriteAssets(
+        frames=tuple(frames),
+        clips=clips,
+        anchor_x=float(anchor.get("x", 0.5)),
+        anchor_y=float(anchor.get("y", 1.0)),
+    )
+
+
+def _slice_sprite_sheet(sheet: QPixmap, columns: int, rows: int) -> list[QPixmap]:
     frames = []
 
-    for i in range(frame_count):
-        raw_frame = sheet.copy(
-            i * frame_width,
-            0,
-            frame_width,
-            frame_height,
-        )
+    for row in range(rows):
+        top = round(row * sheet.height() / rows)
+        bottom = round((row + 1) * sheet.height() / rows)
 
-        frames.append(trim_transparent_space(raw_frame))
+        for column in range(columns):
+            left = round(column * sheet.width() / columns)
+            right = round((column + 1) * sheet.width() / columns)
+            frames.append(sheet.copy(left, top, right - left, bottom - top))
 
     return frames
 
 
-def trim_transparent_space(pixmap: QPixmap) -> QPixmap:
-    image = pixmap.toImage().convertToFormat(QImage.Format.Format_ARGB32)
+def _load_clips(raw_clips: dict, frame_count: int) -> dict[str, AnimationClip]:
+    clips = {}
 
-    min_x = image.width()
-    min_y = image.height()
-    max_x = 0
-    max_y = 0
-    found_pixel = False
+    for name, raw_clip in raw_clips.items():
+        frames = tuple(
+            AnimationFrame(
+                sprite=int(raw_frame["sprite"]),
+                duration_ms=max(1, int(raw_frame["duration_ms"])),
+            )
+            for raw_frame in raw_clip["frames"]
+        )
 
-    for y in range(image.height()):
-        for x in range(image.width()):
-            if image.pixelColor(x, y).alpha() > 10:
-                min_x = min(min_x, x)
-                min_y = min(min_y, y)
-                max_x = max(max_x, x)
-                max_y = max(max_y, y)
-                found_pixel = True
+        if not frames:
+            raise ValueError(f"Animation '{name}' has no frames")
 
-    if not found_pixel:
-        return pixmap
+        if any(frame.sprite < 0 or frame.sprite >= frame_count for frame in frames):
+            raise ValueError(f"Animation '{name}' references an invalid sprite")
 
-    padding = 6
+        clips[name] = AnimationClip(
+            name=name,
+            frames=frames,
+            loop=bool(raw_clip.get("loop", True)),
+        )
 
-    min_x = max(0, min_x - padding)
-    min_y = max(0, min_y - padding)
-    max_x = min(image.width() - 1, max_x + padding)
-    max_y = min(image.height() - 1, max_y + padding)
+    required_clips = {
+        "idle",
+        "blink",
+        "walk",
+        "talk",
+        "pet",
+        "treat",
+        "ball",
+        "paused",
+    }
+    missing_clips = required_clips - clips.keys()
+    if missing_clips:
+        missing = ", ".join(sorted(missing_clips))
+        raise ValueError(f"Animation manifest is missing clips: {missing}")
 
-    crop_rect = QRect(
-        min_x,
-        min_y,
-        max_x - min_x + 1,
-        max_y - min_y + 1,
-    )
-
-    return pixmap.copy(crop_rect)
+    return clips

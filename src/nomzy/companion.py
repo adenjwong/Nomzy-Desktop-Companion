@@ -1,12 +1,13 @@
-from PySide6.QtCore import QPoint, QTimer, Qt
+from PySide6.QtCore import QElapsedTimer, QPoint, QTimer, Qt
 from PySide6.QtWidgets import QWidget
 
+from .animation import AnimationPlayer
 from .behavior import CompanionBehaviorMixin
 from .interactions import CompanionInteractionMixin
 from .rendering import CompanionRenderingMixin
 from .settings import load_settings
 from .speech import load_speech
-from .sprites import load_sprite_frames
+from .sprites import load_sprite_assets
 from .windowing import CompanionWindowMixin
 
 
@@ -57,7 +58,6 @@ class NomzyDog(
         self.close_menu_on_release = False
         self.menu_visible = False
 
-        self.frame = 0
         self.paused = False
         self.movement_state = "idle"
         self.idle_ticks_remaining = self.random_setting_range(
@@ -75,8 +75,19 @@ class NomzyDog(
             "speech_min_ticks",
             "speech_max_ticks",
         )
+        sprite_assets = load_sprite_assets()
+        self.sprite_frames = sprite_assets.frames
+        self.sprite_anchor_x = sprite_assets.anchor_x
+        self.sprite_anchor_y = sprite_assets.anchor_y
+        self.animation_player = AnimationPlayer(sprite_assets.clips, "idle")
+        self.active_reaction = None
+        self.ambient_animation = None
+        self.talk_animation_pending = False
+        self.blink_cooldown_ms = self.random_blink_cooldown()
         self.reaction_ticks_remaining = 0
-        self.sprite_frames = load_sprite_frames()
+
+        self.animation_clock = QElapsedTimer()
+        self.animation_clock.start()
 
         self.timer = self._start_timer(40, self.tick)
         self.topmost_timer = self._start_timer(1000, self.enforce_always_on_top)
@@ -94,15 +105,15 @@ class NomzyDog(
         return timer
 
     def tick(self):
-        self.frame += 1
+        elapsed_ms = max(0, min(self.animation_clock.restart(), 250))
+
         if not self.paused and not self.menu_visible:
             if self.settings["movement_enabled"]:
                 self.update_movement()
             if self.settings["speech_enabled"]:
                 self.update_random_speech()
 
-        if self.reaction_ticks_remaining > 0:
-            self.reaction_ticks_remaining -= 1
+        self.update_animation(elapsed_ms)
 
         self.update_window_size_for_state()
         self.update_overlay_mask()

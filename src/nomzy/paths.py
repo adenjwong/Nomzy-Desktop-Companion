@@ -27,3 +27,7 @@ def get_state_path() -> Path:
 
 def get_sprite_sheet_path() -> Path:
     return get_assets_dir() / "nomzy_sprite_sheet.png"
+
+
+def get_animation_manifest_path() -> Path:
+    return get_assets_dir() / "nomzy_animations.json"

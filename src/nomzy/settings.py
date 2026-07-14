@@ -36,6 +36,9 @@ DEFAULT_SETTINGS = {
     "walk_min_ticks": 10,
     "walk_max_ticks": 35,
 
+    "blink_min_interval_ms": 2200,
+    "blink_max_interval_ms": 6500,
+
     "speech_enabled": True,
     "speech_min_ticks": 1500,
     "speech_max_ticks": 4500,

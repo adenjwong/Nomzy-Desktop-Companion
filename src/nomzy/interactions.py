@@ -71,6 +71,7 @@ class CompanionInteractionMixin:
             self.close_menu_on_release = False
 
         self.update_window_size_for_state()
+        self.update_animation(0)
         self.update_overlay_mask()
         self.update()
         self.enforce_always_on_top()
@@ -82,6 +83,7 @@ class CompanionInteractionMixin:
         self.pending_menu_action = None
         self.close_menu_on_release = False
         self.update_window_size_for_state()
+        self.update_animation(0)
         self.update_overlay_mask()
         self.update()
 
@@ -98,7 +100,7 @@ class CompanionInteractionMixin:
         elif action == "quit":
             QApplication.quit()
         elif action in {"pet", "treat", "ball"}:
-            self.pet_nomzy()
+            self.pet_nomzy(action)
             self.say_random_speech(action)
         elif action == "talk":
             self.say_random_speech("talk")
@@ -190,3 +192,4 @@ class CompanionInteractionMixin:
 
     def toggle_pause(self):
         self.paused = not self.paused
+        self.update_animation(0)

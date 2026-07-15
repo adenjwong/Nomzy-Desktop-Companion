@@ -143,6 +143,8 @@ class CompanionWindowMixin:
             self.speech_cooldown_ticks,
             int(self.settings["speech_max_ticks"]),
         )
+        if self.movement_state == "idle":
+            self.idle_ticks_remaining = self.random_walk_cooldown_ticks()
 
         if self.menu_visible:
             desired_width, desired_height = (

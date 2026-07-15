@@ -44,9 +44,10 @@ class CompanionRenderingMixin:
         return self.sprite_frames[self.animation_player.frame.sprite]
 
     def get_scaled_sprite(self) -> QPixmap:
+        render_scale = self.animation_player.clip.render_scale
         target_size = QSize(
-            int(self.settings["sprite_width"]),
-            int(self.settings["sprite_height"]),
+            round(int(self.settings["sprite_width"]) * render_scale),
+            round(int(self.settings["sprite_height"]) * render_scale),
         )
         return self.current_sprite().scaled(
             target_size,
@@ -82,6 +83,14 @@ class CompanionRenderingMixin:
         sprite_rect = self.get_sprite_rect(scaled_sprite)
         padding = int(self.settings.get("sprite_click_padding", 8))
         return sprite_rect.adjusted(-padding, -padding, padding, padding).contains(point)
+
+    def get_drag_anchor_point(self):
+        scaled_sprite = self.get_scaled_sprite()
+        sprite_rect = self.get_sprite_rect(scaled_sprite)
+        return QPoint(
+            sprite_rect.center().x(),
+            sprite_rect.top() + round(sprite_rect.height() * 0.32),
+        )
 
     def get_mouth_point(self, sprite_rect):
         horizontal_ratio = 0.86 if self.last_direction >= 0 else 0.14

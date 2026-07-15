@@ -51,19 +51,17 @@ class NomzyDog(
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setAutoFillBackground(False)
 
-        self.drag_position = QPoint()
         self.mouse_press_global = QPoint()
+        self.drag_direction_x = 0
         self.is_dragging = False
+        self.drag_animation_pending = False
         self.pending_menu_action = None
         self.close_menu_on_release = False
         self.menu_visible = False
 
         self.paused = False
         self.movement_state = "idle"
-        self.idle_ticks_remaining = self.random_setting_range(
-            "idle_min_ticks",
-            "idle_max_ticks",
-        )
+        self.idle_ticks_remaining = self.random_walk_cooldown_ticks()
         self.walk_ticks_remaining = 0
         self.walk_step_x = 0
         self.walk_step_y = 0
@@ -84,7 +82,7 @@ class NomzyDog(
         self.ambient_animation = None
         self.talk_animation_pending = False
         self.blink_cooldown_ms = self.random_blink_cooldown()
-        self.reaction_ticks_remaining = 0
+        self.rest_cooldown_ms = self.random_rest_cooldown()
 
         self.animation_clock = QElapsedTimer()
         self.animation_clock.start()

@@ -1,9 +1,11 @@
 import random
-from math import ceil
 
 from PySide6.QtWidgets import QApplication
 
 from .speech import choose_speech
+
+
+TICKS_PER_SECOND = 25
 
 
 class CompanionBehaviorMixin:
@@ -67,7 +69,13 @@ class CompanionBehaviorMixin:
         self.enforce_always_on_top()
 
     def update_movement(self):
+        if self.is_dragging:
+            return
+
         if self.movement_state == "idle":
+            if self.ambient_animation in {"sit", "sleep"}:
+                return
+
             self.idle_ticks_remaining -= 1
 
             if self.idle_ticks_remaining <= 0:
@@ -75,6 +83,18 @@ class CompanionBehaviorMixin:
 
         elif self.movement_state == "walking":
             self.walk()
+
+    def random_walk_cooldown_ticks(self):
+        interval_seconds = max(
+            1,
+            int(self.settings.get("walk_interval_seconds", 10)),
+        )
+        interval_ticks = interval_seconds * TICKS_PER_SECOND
+        variation = max(1, round(interval_ticks * 0.25))
+        return random.randint(
+            max(1, interval_ticks - variation),
+            interval_ticks + variation,
+        )
 
     def start_tiny_walk(self):
         self.movement_state = "walking"
@@ -125,30 +145,38 @@ class CompanionBehaviorMixin:
         self.walk_step_x = 0
         self.walk_step_y = 0
         self.walk_ticks_remaining = 0
-        self.idle_ticks_remaining = self.random_setting_range(
-            "idle_min_ticks",
-            "idle_max_ticks",
-        )
+        self.idle_ticks_remaining = self.random_walk_cooldown_ticks()
 
     def pet_nomzy(self, animation_name="pet"):
         self.movement_state = "idle"
         self.walk_ticks_remaining = 0
         self.walk_step_x = 0
         self.walk_step_y = 0
-        self.idle_ticks_remaining = self.random_setting_range(
-            "idle_min_ticks",
-            "idle_max_ticks",
-        )
+        self.idle_ticks_remaining = self.random_walk_cooldown_ticks()
         self.start_reaction(animation_name)
 
     def random_blink_cooldown(self):
-        min_interval = int(self.settings.get("blink_min_interval_ms", 2200))
-        max_interval = int(self.settings.get("blink_max_interval_ms", 6500))
+        min_interval = int(self.settings.get("blink_min_interval_ms", 6000))
+        max_interval = int(self.settings.get("blink_max_interval_ms", 12000))
 
         if min_interval > max_interval:
             min_interval, max_interval = max_interval, min_interval
 
         return random.randint(max(1, min_interval), max(1, max_interval))
+
+    def random_rest_cooldown(self):
+        min_interval = int(self.settings.get("rest_min_interval_ms", 45000))
+        max_interval = int(self.settings.get("rest_max_interval_ms", 120000))
+
+        if min_interval > max_interval:
+            min_interval, max_interval = max_interval, min_interval
+
+        return random.randint(max(1, min_interval), max(1, max_interval))
+
+    def choose_rest_animation(self):
+        sleep_chance = int(self.settings.get("sleep_chance_percent", 30))
+        sleep_chance = max(0, min(sleep_chance, 100))
+        return "sleep" if random.randint(1, 100) <= sleep_chance else "sit"
 
     def start_reaction(self, animation_name):
         if animation_name not in self.animation_player.clips:
@@ -156,8 +184,6 @@ class CompanionBehaviorMixin:
 
         self.active_reaction = animation_name
         self.ambient_animation = None
-        clip = self.animation_player.clips[animation_name]
-        self.reaction_ticks_remaining = ceil(clip.duration_ms / 40)
         self.animation_player.play(animation_name, restart=True)
 
     def update_animation(self, elapsed_ms):
@@ -166,27 +192,35 @@ class CompanionBehaviorMixin:
         if player.finished:
             if self.active_reaction == player.clip_name:
                 self.active_reaction = None
-                self.reaction_ticks_remaining = 0
             if self.ambient_animation == player.clip_name:
                 self.ambient_animation = None
 
-        idle_can_blink = (
-            not self.paused
+        idle_can_animate = (
+            not self.is_dragging
+            and not self.paused
             and not self.menu_visible
             and not self.message
             and self.movement_state == "idle"
             and self.active_reaction is None
         )
 
-        if idle_can_blink:
+        if idle_can_animate:
             self.blink_cooldown_ms -= elapsed_ms
-            if self.blink_cooldown_ms <= 0 and self.ambient_animation is None:
-                self.ambient_animation = "blink"
-                self.blink_cooldown_ms = self.random_blink_cooldown()
+            self.rest_cooldown_ms -= elapsed_ms
+
+            if self.ambient_animation is None:
+                if self.rest_cooldown_ms <= 0:
+                    self.ambient_animation = self.choose_rest_animation()
+                    self.rest_cooldown_ms = self.random_rest_cooldown()
+                elif self.blink_cooldown_ms <= 0:
+                    self.ambient_animation = "blink"
+                    self.blink_cooldown_ms = self.random_blink_cooldown()
         else:
             self.ambient_animation = None
 
-        if self.paused or self.menu_visible:
+        if self.is_dragging:
+            desired_animation = "drag"
+        elif self.paused or self.menu_visible:
             desired_animation = "paused"
         elif self.active_reaction is not None:
             desired_animation = self.active_reaction
@@ -202,12 +236,17 @@ class CompanionBehaviorMixin:
         restart_talk = (
             desired_animation == "talk" and self.talk_animation_pending
         )
-        player.play(desired_animation, restart=restart_talk)
+        restart_drag = (
+            desired_animation == "drag" and self.drag_animation_pending
+        )
+        player.play(
+            desired_animation,
+            restart=restart_talk or restart_drag,
+        )
 
         if desired_animation == "talk":
             self.talk_animation_pending = False
+        if desired_animation == "drag":
+            self.drag_animation_pending = False
 
         player.advance(elapsed_ms)
-
-        if self.reaction_ticks_remaining > 0:
-            self.reaction_ticks_remaining -= 1

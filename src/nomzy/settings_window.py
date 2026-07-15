@@ -49,6 +49,11 @@ class NomzySettingsWindow(QWidget):
         self.name_input = QLineEdit()
         self.name_input.setPlaceholderText("friend")
 
+        self.walk_interval_input = QSpinBox()
+        self.walk_interval_input.setMinimum(5)
+        self.walk_interval_input.setMaximum(300)
+        self.walk_interval_input.setSuffix(" sec")
+
         self.speech_min_input = QSpinBox()
         self.speech_min_input.setMinimum(1)
         self.speech_min_input.setMaximum(120)
@@ -75,6 +80,7 @@ class NomzySettingsWindow(QWidget):
         form.addRow("Your name:", self.name_input)
         form.addRow("Nomzy size:", self.size_slider)
         form.addRow("", self.size_label)
+        form.addRow("Walk about every:", self.walk_interval_input)
         form.addRow("Speak at least every:", self.speech_min_input)
         form.addRow("Speak at most every:", self.speech_max_input)
 
@@ -100,6 +106,15 @@ class NomzySettingsWindow(QWidget):
 
         self.size_slider.setValue(
             int(self.settings.get("sprite_width", DEFAULT_SETTINGS["sprite_width"]))
+        )
+
+        self.walk_interval_input.setValue(
+            int(
+                self.settings.get(
+                    "walk_interval_seconds",
+                    DEFAULT_SETTINGS["walk_interval_seconds"],
+                )
+            )
         )
 
         self.speech_min_input.setValue(
@@ -143,6 +158,7 @@ class NomzySettingsWindow(QWidget):
         updated_settings["user_name"] = self.name_input.text().strip()
         updated_settings["sprite_width"] = sprite_width
         updated_settings["sprite_height"] = sprite_height
+        updated_settings["walk_interval_seconds"] = self.walk_interval_input.value()
         updated_settings["speech_min_ticks"] = minutes_to_ticks(min_minutes)
         updated_settings["speech_max_ticks"] = minutes_to_ticks(max_minutes)
 

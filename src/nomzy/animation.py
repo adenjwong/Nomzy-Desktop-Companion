@@ -12,6 +12,7 @@ class AnimationClip:
     name: str
     frames: tuple[AnimationFrame, ...]
     loop: bool = True
+    render_scale: float = 1.0
 
     @property
     def duration_ms(self) -> int:

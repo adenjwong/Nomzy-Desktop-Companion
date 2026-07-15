@@ -31,13 +31,15 @@ DEFAULT_SETTINGS = {
     "speech_bubble_blocks_input": True,
 
     "movement_enabled": True,
-    "idle_min_ticks": 120,
-    "idle_max_ticks": 400,
+    "walk_interval_seconds": 10,
     "walk_min_ticks": 10,
     "walk_max_ticks": 35,
 
-    "blink_min_interval_ms": 2200,
-    "blink_max_interval_ms": 6500,
+    "blink_min_interval_ms": 6000,
+    "blink_max_interval_ms": 12000,
+    "rest_min_interval_ms": 45000,
+    "rest_max_interval_ms": 120000,
+    "sleep_chance_percent": 30,
 
     "speech_enabled": True,
     "speech_min_ticks": 1500,

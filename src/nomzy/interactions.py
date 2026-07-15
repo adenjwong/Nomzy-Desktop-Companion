@@ -7,6 +7,9 @@ from PySide6.QtWidgets import QApplication, QMenu
 from .settings_window import NomzySettingsWindow
 
 
+DRAG_DIRECTION_THRESHOLD = 3
+
+
 class CompanionInteractionMixin:
     """Radial menu actions, context menu, and mouse interaction."""
 
@@ -117,6 +120,50 @@ class CompanionInteractionMixin:
         self.settings_window.raise_()
         self.settings_window.activateWindow()
 
+    def begin_dragging(self):
+        if self.is_dragging:
+            return
+
+        self.is_dragging = True
+        self.drag_animation_pending = True
+        self.menu_visible = False
+        self.movement_state = "idle"
+        self.walk_ticks_remaining = 0
+        self.walk_step_x = 0
+        self.walk_step_y = 0
+        self.idle_ticks_remaining = self.random_walk_cooldown_ticks()
+        self.active_reaction = None
+        self.ambient_animation = None
+        self.update_animation(0)
+        self.update_window_size_for_state()
+        self.update_overlay_mask()
+        self.update()
+
+    def finish_dragging(self):
+        if not self.is_dragging:
+            return
+
+        self.is_dragging = False
+        self.drag_animation_pending = False
+        self.idle_ticks_remaining = self.random_walk_cooldown_ticks()
+        self.update_animation(0)
+        self.update_overlay_mask()
+        self.update()
+
+    def update_drag_direction(self, current_global):
+        horizontal_change = current_global.x() - self.drag_direction_x
+        if abs(horizontal_change) < DRAG_DIRECTION_THRESHOLD:
+            return
+
+        self.drag_direction_x = current_global.x()
+        direction = 1 if horizontal_change > 0 else -1
+        if direction == self.last_direction:
+            return
+
+        self.last_direction = direction
+        self.update_overlay_mask()
+        self.update()
+
     def mousePressEvent(self, event):
         if event.button() != Qt.MouseButton.LeftButton:
             return
@@ -135,9 +182,10 @@ class CompanionInteractionMixin:
                 event.accept()
                 return
 
-        self.drag_position = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
         self.mouse_press_global = event.globalPosition().toPoint()
+        self.drag_direction_x = self.mouse_press_global.x()
         self.is_dragging = False
+        self.drag_animation_pending = False
         event.accept()
 
     def mouseMoveEvent(self, event):
@@ -150,8 +198,9 @@ class CompanionInteractionMixin:
         current_global = event.globalPosition().toPoint()
         moved_distance = (current_global - self.mouse_press_global).manhattanLength()
         if moved_distance > 4:
-            self.is_dragging = True
-            self.move(current_global - self.drag_position)
+            self.begin_dragging()
+            self.update_drag_direction(current_global)
+            self.move(current_global - self.get_drag_anchor_point())
         event.accept()
 
     def mouseReleaseEvent(self, event):
@@ -167,9 +216,10 @@ class CompanionInteractionMixin:
             self.close_menu()
             event.accept()
             return
-        if not self.is_dragging and self.point_is_on_sprite(event.position().toPoint()):
+        if self.is_dragging:
+            self.finish_dragging()
+        elif self.point_is_on_sprite(event.position().toPoint()):
             self.toggle_menu()
-        self.is_dragging = False
         event.accept()
 
     def contextMenuEvent(self, event):

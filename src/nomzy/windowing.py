@@ -1,6 +1,7 @@
 from PySide6.QtCore import QPoint
 from PySide6.QtWidgets import QApplication
 
+from .activity import CompanionState
 from .macos_overlay import configure_macos_overlay_window, is_macos
 from .state import load_state, save_state as write_state
 
@@ -90,7 +91,7 @@ class CompanionWindowMixin:
             self.raise_()
 
     def update_window_size_for_state(self):
-        if self.menu_visible:
+        if self.activity.menu_open:
             desired_width = self.menu_window_width
             desired_height = self.menu_window_height
             desired_message, desired_menu = False, True
@@ -138,15 +139,12 @@ class CompanionWindowMixin:
         old_sprite_rect = self.get_sprite_rect(old_scaled_sprite)
         old_sprite_center_global = self.mapToGlobal(old_sprite_rect.center())
         self.settings = dict(updated_settings)
+        self.scheduler.update_settings(self.settings)
         self.recalculate_window_dimensions()
-        self.speech_cooldown_ticks = min(
-            self.speech_cooldown_ticks,
-            int(self.settings["speech_max_ticks"]),
-        )
-        if self.movement_state == "idle":
-            self.idle_ticks_remaining = self.random_walk_cooldown_ticks()
+        if self.activity.state is CompanionState.IDLE:
+            self.scheduler.reset_walk()
 
-        if self.menu_visible:
+        if self.activity.menu_open:
             desired_width, desired_height = (
                 self.menu_window_width,
                 self.menu_window_height,

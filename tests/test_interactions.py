@@ -2,28 +2,42 @@ import unittest
 
 from PySide6.QtCore import QPoint
 
+from nomzy.activity import (
+    CompanionActivityMixin,
+    CompanionEvent,
+    CompanionState,
+    CompanionStateMachine,
+)
 from nomzy.interactions import CompanionInteractionMixin
+from nomzy.scheduling import BehaviorScheduler
 
 
-class InteractionHarness(CompanionInteractionMixin):
+ACTIVITY_CLIPS = {
+    CompanionState.IDLE: "idle",
+    CompanionState.WALKING: "walk",
+    CompanionState.BLINKING: "blink",
+    CompanionState.SITTING: "sit",
+    CompanionState.SLEEPING: "sleep",
+    CompanionState.TALKING: "talk",
+    CompanionState.DRAGGING: "drag",
+    CompanionState.PAUSED: "paused",
+    CompanionState.MENU: "paused",
+}
+
+
+class InteractionHarness(CompanionActivityMixin, CompanionInteractionMixin):
     def __init__(self):
-        self.is_dragging = False
-        self.drag_animation_pending = False
-        self.menu_visible = True
-        self.movement_state = "walking"
-        self.walk_ticks_remaining = 10
+        self.activity = CompanionStateMachine(ACTIVITY_CLIPS)
+        self.activity.menu_open = True
+        self.activity.state = CompanionState.MENU
+        self.scheduler = BehaviorScheduler({"walk_interval_seconds": 10})
+        self.scheduler.start_walk()
         self.walk_step_x = 1
         self.walk_step_y = 1
-        self.idle_ticks_remaining = 0
-        self.active_reaction = "pet"
-        self.ambient_animation = "blink"
         self.drag_direction_x = 100
         self.last_direction = 1
         self.animation_updates = 0
         self.paint_updates = 0
-
-    def random_walk_cooldown_ticks(self):
-        return 250
 
     def update_animation(self, elapsed_ms):
         self.animation_updates += 1
@@ -60,25 +74,19 @@ class DragInteractionTests(unittest.TestCase):
 
         harness.begin_dragging()
 
-        self.assertTrue(harness.is_dragging)
-        self.assertTrue(harness.drag_animation_pending)
-        self.assertFalse(harness.menu_visible)
-        self.assertEqual(harness.movement_state, "idle")
-        self.assertEqual(harness.walk_ticks_remaining, 0)
-        self.assertEqual(harness.idle_ticks_remaining, 250)
-        self.assertIsNone(harness.active_reaction)
-        self.assertIsNone(harness.ambient_animation)
+        self.assertEqual(harness.activity.state, CompanionState.DRAGGING)
+        self.assertFalse(harness.activity.menu_open)
+        self.assertEqual(harness.scheduler.walk_ticks_remaining, 0)
+        self.assertGreaterEqual(harness.scheduler.walk_cooldown_ticks, 188)
+        self.assertLessEqual(harness.scheduler.walk_cooldown_ticks, 312)
 
     def test_finish_dragging_returns_to_regular_animation(self):
         harness = InteractionHarness()
-        harness.is_dragging = True
-        harness.drag_animation_pending = True
+        harness.activity.dispatch(CompanionEvent.START_DRAGGING)
 
         harness.finish_dragging()
 
-        self.assertFalse(harness.is_dragging)
-        self.assertFalse(harness.drag_animation_pending)
-        self.assertEqual(harness.idle_ticks_remaining, 250)
+        self.assertEqual(harness.activity.state, CompanionState.IDLE)
         self.assertEqual(harness.animation_updates, 1)
 
 

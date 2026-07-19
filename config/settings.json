@@ -19,7 +19,7 @@
   "sprite_click_padding": 8,
   "speech_bubble_blocks_input": true,
   "movement_enabled": true,
-  "walk_interval_seconds": 10,
+  "walk_interval_seconds": 5,
   "walk_min_ticks": 10,
   "walk_max_ticks": 35,
   "blink_min_interval_ms": 6000,

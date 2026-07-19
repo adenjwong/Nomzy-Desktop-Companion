@@ -17,6 +17,7 @@ class SpriteManifestTests(unittest.TestCase):
             "animations/nomzy_walk_strip.png",
             "animations/nomzy_eye_scrunch_strip.png",
             "animations/nomzy_sit_strip.png",
+            "animations/nomzy_sit_blink.png",
             "animations/nomzy_sleepy_lie_down_strip.png",
             "animations/nomzy_scruff_drag_strip.png",
         }
@@ -43,6 +44,34 @@ class SpriteManifestTests(unittest.TestCase):
             "paused",
         }
         self.assertTrue(required.issubset(self.manifest["clips"]))
+
+    def test_manifest_declares_its_schema_and_playback_defaults(self):
+        self.assertEqual(self.manifest["schema_version"], 1)
+        self.assertEqual(self.manifest["defaults"]["render_scale"], 1.0)
+        self.assertTrue(
+            self.manifest["defaults"]["mirror_with_direction"]
+        )
+
+        valid_playback = {"loop", "return", "hold"}
+        for clip in self.manifest["clips"].values():
+            self.assertIn(clip["playback"], valid_playback)
+
+    def test_every_activity_references_a_clip(self):
+        expected_activities = {
+            "idle",
+            "walking",
+            "blinking",
+            "sitting",
+            "sleeping",
+            "talking",
+            "dragging",
+            "paused",
+            "menu",
+        }
+
+        self.assertEqual(set(self.manifest["activities"]), expected_activities)
+        for clip_name in self.manifest["activities"].values():
+            self.assertIn(clip_name, self.manifest["clips"])
 
     def test_frame_references_fit_the_grid(self):
         for clip in self.manifest["clips"].values():
@@ -76,7 +105,8 @@ class SpriteManifestTests(unittest.TestCase):
             != neutral_frame
         ]
 
-        self.assertFalse(talk["loop"])
+        self.assertEqual(talk["playback"], "hold")
+        self.assertEqual(talk["hold_frame"], len(talk["frames"]) - 1)
         self.assertEqual(len(expression_frames), 1)
         self.assertEqual(
             {
@@ -92,16 +122,48 @@ class SpriteManifestTests(unittest.TestCase):
             start = clip["frames"][0]
             end = clip["frames"][-1]
 
-            self.assertFalse(clip["loop"])
+            self.assertEqual(clip["playback"], "return")
             self.assertEqual(
                 (start["source"], start["sprite"]),
                 (end["source"], end["sprite"]),
             )
 
+    def test_rest_animations_hold_their_resting_poses(self):
+        sit_frames = self.manifest["clips"]["sit"]["frames"]
+        sleep_frames = self.manifest["clips"]["sleep"]["frames"]
+
+        seated_frames = [
+            frame
+            for frame in sit_frames
+            if frame["source"] == "sit_blink"
+            or (frame["source"], frame["sprite"]) == ("sit", 3)
+        ]
+
+        self.assertEqual(sum(frame["duration_ms"] for frame in seated_frames), 7000)
+        self.assertEqual(sleep_frames[7]["duration_ms"], 11000)
+
+    def test_sitting_animation_blinks_once_without_moving(self):
+        sit_frames = self.manifest["clips"]["sit"]["frames"]
+        blink_indices = [
+            index
+            for index, frame in enumerate(sit_frames)
+            if frame["source"] == "sit_blink"
+        ]
+
+        self.assertEqual(blink_indices, [4])
+        blink_index = blink_indices[0]
+        for adjacent_index in (blink_index - 1, blink_index + 1):
+            adjacent = sit_frames[adjacent_index]
+            self.assertEqual(
+                (adjacent["source"], adjacent["sprite"]),
+                ("sit", 3),
+            )
+
     def test_drag_animation_settles_on_the_open_hanging_pose(self):
         drag = self.manifest["clips"]["drag"]
 
-        self.assertFalse(drag["loop"])
+        self.assertEqual(drag["playback"], "hold")
+        self.assertEqual(drag["hold_frame"], len(drag["frames"]) - 1)
         self.assertEqual(drag["render_scale"], 1.2)
         self.assertEqual(
             (drag["frames"][-1]["source"], drag["frames"][-1]["sprite"]),

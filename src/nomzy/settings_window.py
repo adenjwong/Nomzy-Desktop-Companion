@@ -12,9 +12,9 @@ from PySide6.QtWidgets import (
 )
 
 from .settings import DEFAULT_SETTINGS, save_settings
+from .scheduling import TICKS_PER_SECOND
 
 
-TICKS_PER_SECOND = 25
 SPRITE_ASPECT_RATIO = 85 / 110
 
 

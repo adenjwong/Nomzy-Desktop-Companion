@@ -1,4 +1,11 @@
 from dataclasses import dataclass
+from enum import Enum
+
+
+class AnimationPlayback(Enum):
+    LOOP = "loop"
+    RETURN = "return"
+    HOLD = "hold"
 
 
 @dataclass(frozen=True)
@@ -11,12 +18,28 @@ class AnimationFrame:
 class AnimationClip:
     name: str
     frames: tuple[AnimationFrame, ...]
-    loop: bool = True
+    playback: AnimationPlayback = AnimationPlayback.LOOP
+    hold_frame: int | None = None
     render_scale: float = 1.0
+    mirror_with_direction: bool = True
 
     @property
     def duration_ms(self) -> int:
         return sum(frame.duration_ms for frame in self.frames)
+
+    @property
+    def loops(self) -> bool:
+        return self.playback is AnimationPlayback.LOOP
+
+    @property
+    def returns_to_activity(self) -> bool:
+        return self.playback is AnimationPlayback.RETURN
+
+    @property
+    def final_frame_index(self) -> int:
+        if self.hold_frame is not None:
+            return self.hold_frame
+        return len(self.frames) - 1
 
 
 class AnimationPlayer:
@@ -65,10 +88,10 @@ class AnimationPlayer:
                 self.frame_index += 1
                 continue
 
-            if self.clip.loop:
+            if self.clip.loops:
                 self.frame_index = 0
             else:
-                self.frame_index = len(self.clip.frames) - 1
+                self.frame_index = self.clip.final_frame_index
                 self.elapsed_in_frame_ms = 0
                 self.finished = True
                 break

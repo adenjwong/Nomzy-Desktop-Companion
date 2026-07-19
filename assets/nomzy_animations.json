@@ -1,4 +1,9 @@
 {
+  "schema_version": 1,
+  "defaults": {
+    "render_scale": 1.0,
+    "mirror_with_direction": true
+  },
   "sources": {
     "idle": {
       "file": "animations/nomzy_idle_blink_strip.png",
@@ -16,6 +21,10 @@
       "file": "animations/nomzy_sit_strip.png",
       "grid": {"columns": 4, "rows": 1}
     },
+    "sit_blink": {
+      "file": "animations/nomzy_sit_blink.png",
+      "grid": {"columns": 1, "rows": 1}
+    },
     "sleep": {
       "file": "animations/nomzy_sleepy_lie_down_strip.png",
       "grid": {"columns": 4, "rows": 1}
@@ -29,15 +38,26 @@
     "x": 0.5,
     "y": 1.0
   },
+  "activities": {
+    "idle": "idle",
+    "walking": "walk",
+    "blinking": "blink",
+    "sitting": "sit",
+    "sleeping": "sleep",
+    "talking": "talk",
+    "dragging": "drag",
+    "paused": "paused",
+    "menu": "paused"
+  },
   "clips": {
     "idle": {
-      "loop": true,
+      "playback": "loop",
       "frames": [
         {"source": "idle", "sprite": 0, "duration_ms": 1000}
       ]
     },
     "blink": {
-      "loop": false,
+      "playback": "return",
       "frames": [
         {"source": "idle", "sprite": 1, "duration_ms": 70},
         {"source": "idle", "sprite": 2, "duration_ms": 90},
@@ -46,7 +66,7 @@
       ]
     },
     "walk": {
-      "loop": true,
+      "playback": "loop",
       "frames": [
         {"source": "walk", "sprite": 0, "duration_ms": 420},
         {"source": "walk", "sprite": 1, "duration_ms": 90},
@@ -55,14 +75,15 @@
       ]
     },
     "talk": {
-      "loop": false,
+      "playback": "hold",
+      "hold_frame": 1,
       "frames": [
         {"source": "idle", "sprite": 2, "duration_ms": 110},
         {"source": "idle", "sprite": 0, "duration_ms": 180}
       ]
     },
     "pet": {
-      "loop": false,
+      "playback": "return",
       "frames": [
         {"source": "expression", "sprite": 0, "duration_ms": 90},
         {"source": "expression", "sprite": 1, "duration_ms": 100},
@@ -72,7 +93,7 @@
       ]
     },
     "treat": {
-      "loop": false,
+      "playback": "return",
       "frames": [
         {"source": "expression", "sprite": 0, "duration_ms": 80},
         {"source": "expression", "sprite": 1, "duration_ms": 80},
@@ -81,7 +102,7 @@
       ]
     },
     "ball": {
-      "loop": false,
+      "playback": "return",
       "frames": [
         {"source": "walk", "sprite": 0, "duration_ms": 120},
         {"source": "walk", "sprite": 1, "duration_ms": 90},
@@ -91,11 +112,13 @@
       ]
     },
     "sit": {
-      "loop": false,
+      "playback": "return",
       "frames": [
         {"source": "sit", "sprite": 0, "duration_ms": 120},
         {"source": "sit", "sprite": 1, "duration_ms": 160},
         {"source": "sit", "sprite": 2, "duration_ms": 160},
+        {"source": "sit", "sprite": 3, "duration_ms": 3400},
+        {"source": "sit_blink", "sprite": 0, "duration_ms": 100},
         {"source": "sit", "sprite": 3, "duration_ms": 3500},
         {"source": "sit", "sprite": 2, "duration_ms": 160},
         {"source": "sit", "sprite": 1, "duration_ms": 160},
@@ -103,7 +126,7 @@
       ]
     },
     "sleep": {
-      "loop": false,
+      "playback": "return",
       "frames": [
         {"source": "sit", "sprite": 0, "duration_ms": 120},
         {"source": "sit", "sprite": 1, "duration_ms": 160},
@@ -112,7 +135,7 @@
         {"source": "sleep", "sprite": 0, "duration_ms": 240},
         {"source": "sleep", "sprite": 1, "duration_ms": 200},
         {"source": "sleep", "sprite": 2, "duration_ms": 320},
-        {"source": "sleep", "sprite": 3, "duration_ms": 5500},
+        {"source": "sleep", "sprite": 3, "duration_ms": 11000},
         {"source": "sleep", "sprite": 2, "duration_ms": 260},
         {"source": "sleep", "sprite": 1, "duration_ms": 200},
         {"source": "sleep", "sprite": 0, "duration_ms": 240},
@@ -123,7 +146,8 @@
       ]
     },
     "drag": {
-      "loop": false,
+      "playback": "hold",
+      "hold_frame": 3,
       "render_scale": 1.2,
       "frames": [
         {"source": "drag", "sprite": 0, "duration_ms": 110},
@@ -133,7 +157,7 @@
       ]
     },
     "paused": {
-      "loop": true,
+      "playback": "loop",
       "frames": [
         {"source": "idle", "sprite": 0, "duration_ms": 1000}
       ]

@@ -1,6 +1,11 @@
 import unittest
 
-from nomzy.animation import AnimationClip, AnimationFrame, AnimationPlayer
+from nomzy.animation import (
+    AnimationClip,
+    AnimationFrame,
+    AnimationPlayback,
+    AnimationPlayer,
+)
 
 
 class AnimationPlayerTests(unittest.TestCase):
@@ -12,6 +17,7 @@ class AnimationPlayerTests(unittest.TestCase):
                     AnimationFrame(sprite=0, duration_ms=100),
                     AnimationFrame(sprite=1, duration_ms=200),
                 ),
+                playback=AnimationPlayback.LOOP,
             ),
             "once": AnimationClip(
                 name="once",
@@ -19,7 +25,17 @@ class AnimationPlayerTests(unittest.TestCase):
                     AnimationFrame(sprite=2, duration_ms=50),
                     AnimationFrame(sprite=3, duration_ms=75),
                 ),
-                loop=False,
+                playback=AnimationPlayback.RETURN,
+            ),
+            "hold": AnimationClip(
+                name="hold",
+                frames=(
+                    AnimationFrame(sprite=4, duration_ms=50),
+                    AnimationFrame(sprite=5, duration_ms=75),
+                    AnimationFrame(sprite=6, duration_ms=25),
+                ),
+                playback=AnimationPlayback.HOLD,
+                hold_frame=1,
             ),
         }
 
@@ -55,6 +71,14 @@ class AnimationPlayerTests(unittest.TestCase):
 
         player.play("loop", restart=True)
         self.assertEqual(player.frame.sprite, 0)
+
+    def test_hold_clip_settles_on_its_configured_frame(self):
+        player = AnimationPlayer(self.clips, "loop")
+        player.play("hold")
+        player.advance(150)
+
+        self.assertTrue(player.finished)
+        self.assertEqual(player.frame.sprite, 5)
 
 
 if __name__ == "__main__":

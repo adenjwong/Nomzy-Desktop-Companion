@@ -1,10 +1,12 @@
 from PySide6.QtCore import QElapsedTimer, QPoint, QTimer, Qt
 from PySide6.QtWidgets import QWidget
 
+from .activity import CompanionActivityMixin, CompanionStateMachine
 from .animation import AnimationPlayer
 from .behavior import CompanionBehaviorMixin
 from .interactions import CompanionInteractionMixin
 from .rendering import CompanionRenderingMixin
+from .scheduling import BehaviorScheduler
 from .settings import load_settings
 from .speech import load_speech
 from .sprites import load_sprite_assets
@@ -12,6 +14,7 @@ from .windowing import CompanionWindowMixin
 
 
 class NomzyDog(
+    CompanionActivityMixin,
     CompanionWindowMixin,
     CompanionBehaviorMixin,
     CompanionInteractionMixin,
@@ -31,6 +34,9 @@ class NomzyDog(
         self.settings = load_settings()
         self.speech = load_speech()
         self.settings_window = None
+        sprite_assets = load_sprite_assets()
+        self.activity = CompanionStateMachine(sprite_assets.activity_clips)
+        self.scheduler = BehaviorScheduler(self.settings)
 
         self.recalculate_window_dimensions()
         self.setFixedSize(self.base_window_width, self.base_window_height)
@@ -53,36 +59,18 @@ class NomzyDog(
 
         self.mouse_press_global = QPoint()
         self.drag_direction_x = 0
-        self.is_dragging = False
-        self.drag_animation_pending = False
         self.pending_menu_action = None
         self.close_menu_on_release = False
-        self.menu_visible = False
 
-        self.paused = False
-        self.movement_state = "idle"
-        self.idle_ticks_remaining = self.random_walk_cooldown_ticks()
-        self.walk_ticks_remaining = 0
         self.walk_step_x = 0
         self.walk_step_y = 0
         self.last_direction = 1
 
         self.message = ""
-        self.message_ticks_remaining = 0
-        self.speech_cooldown_ticks = self.random_setting_range(
-            "speech_min_ticks",
-            "speech_max_ticks",
-        )
-        sprite_assets = load_sprite_assets()
         self.sprite_frames = sprite_assets.frames
         self.sprite_anchor_x = sprite_assets.anchor_x
         self.sprite_anchor_y = sprite_assets.anchor_y
         self.animation_player = AnimationPlayer(sprite_assets.clips, "idle")
-        self.active_reaction = None
-        self.ambient_animation = None
-        self.talk_animation_pending = False
-        self.blink_cooldown_ms = self.random_blink_cooldown()
-        self.rest_cooldown_ms = self.random_rest_cooldown()
 
         self.animation_clock = QElapsedTimer()
         self.animation_clock.start()
@@ -105,12 +93,23 @@ class NomzyDog(
     def tick(self):
         elapsed_ms = max(0, min(self.animation_clock.restart(), 250))
 
-        if not self.paused and not self.menu_visible:
-            if self.settings["movement_enabled"]:
-                self.update_movement()
-            if self.settings["speech_enabled"]:
-                self.update_random_speech()
+        if not self.activity.blocks_background_updates:
+            movement_action = self.scheduler.next_movement_action(
+                self.activity.state,
+                enabled=bool(self.settings["movement_enabled"]),
+            )
+            self.perform_scheduled_action(movement_action)
+            speech_action = self.scheduler.next_speech_action(
+                enabled=bool(self.settings["speech_enabled"]),
+            )
+            self.perform_scheduled_action(speech_action)
 
+        self.resolve_finished_animation()
+        ambient_action = self.scheduler.next_ambient_action(
+            self.activity.state,
+            elapsed_ms,
+        )
+        self.perform_scheduled_action(ambient_action)
         self.update_animation(elapsed_ms)
 
         self.update_window_size_for_state()

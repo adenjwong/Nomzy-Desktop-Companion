@@ -1,5 +1,13 @@
-from PySide6.QtCore import QPoint, QRect, QSize, Qt
-from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap, QPolygon, QRegion
+from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, QSize, Qt
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QPixmap,
+    QRegion,
+)
 
 
 class CompanionRenderingMixin:
@@ -18,7 +26,7 @@ class CompanionRenderingMixin:
         padding = int(self.settings.get("sprite_click_padding", 8))
         region = QRegion(sprite_rect.adjusted(-padding, -padding, padding, padding))
 
-        if self.menu_visible:
+        if self.activity.menu_open:
             for button in self.get_menu_buttons(sprite_rect):
                 button_region = QRegion(
                     button["rect"],
@@ -27,16 +35,13 @@ class CompanionRenderingMixin:
                 region = region.united(button_region)
 
         if self.message and self.settings.get("speech_bubble_blocks_input", True):
-            bubble_rect, tail = self.get_speech_bubble_geometry(sprite_rect)
-            if bubble_rect is not None:
-                region = region.united(
-                    QRegion(
-                        bubble_rect.adjusted(-3, -3, 3, 3),
-                        QRegion.RegionType.Rectangle,
-                    )
+            bubble_rect, bubble_path = self.get_speech_bubble_geometry(sprite_rect)
+            if bubble_rect is not None and bubble_path is not None:
+                bubble_region = QRegion(
+                    bubble_path.toFillPolygon().toPolygon(),
+                    Qt.FillRule.WindingFill,
                 )
-            if tail is not None:
-                region = region.united(QRegion(tail))
+                region = region.united(bubble_region)
 
         self.setMask(region)
 
@@ -57,7 +62,9 @@ class CompanionRenderingMixin:
 
     def get_sprite_rect(self, scaled_sprite, force_message=None, force_menu=None):
         has_message_layout = self.message if force_message is None else force_message
-        has_menu_layout = self.menu_visible if force_menu is None else force_menu
+        has_menu_layout = (
+            self.activity.menu_open if force_menu is None else force_menu
+        )
 
         if has_menu_layout:
             anchor_x = self.width() / 2
@@ -98,68 +105,128 @@ class CompanionRenderingMixin:
         mouth_y = sprite_rect.top() + int(sprite_rect.height() * 0.38)
         return QPoint(mouth_x, mouth_y)
 
+    def get_speech_tail_tip(self, sprite_rect, mouth):
+        tail_clearance = 12
+        if self.last_direction < 0:
+            return QPoint(sprite_rect.left() - tail_clearance, mouth.y() - 3)
+        return QPoint(sprite_rect.right() + tail_clearance, mouth.y() - 3)
+
     def get_speech_bubble_geometry(self, sprite_rect):
         if not self.message:
             return None, None
 
         mouth = self.get_mouth_point(sprite_rect)
-        bubble_width = 125
-        bubble_height = 40
-        bubble_gap = 18
-        bubble_vertical_offset = 62
+        bubble_width = 145
+        bubble_height = 46
+        bubble_gap = 28
+        bubble_vertical_offset = 64
 
         if self.last_direction >= 0:
             bubble_rect = QRect(
-                mouth.x() + bubble_gap,
+                sprite_rect.right() + bubble_gap,
                 mouth.y() - bubble_vertical_offset,
                 bubble_width,
                 bubble_height,
-            )
-            tail = QPolygon(
-                [
-                    mouth,
-                    QPoint(bubble_rect.left() + 10, bubble_rect.bottom() - 8),
-                    QPoint(bubble_rect.left() + 26, bubble_rect.bottom() - 2),
-                ]
             )
         else:
             bubble_rect = QRect(
-                mouth.x() - bubble_gap - bubble_width,
+                sprite_rect.left() - bubble_gap - bubble_width,
                 mouth.y() - bubble_vertical_offset,
                 bubble_width,
                 bubble_height,
             )
-            tail = QPolygon(
-                [
-                    mouth,
-                    QPoint(bubble_rect.right() - 10, bubble_rect.bottom() - 8),
-                    QPoint(bubble_rect.right() - 26, bubble_rect.bottom() - 2),
-                ]
+        tail_tip = self.get_speech_tail_tip(sprite_rect, mouth)
+        return bubble_rect, self.build_speech_bubble_path(bubble_rect, tail_tip)
+
+    def build_speech_bubble_path(self, bubble_rect, tail_tip):
+        rect = QRectF(bubble_rect)
+        tail_tip = QPointF(tail_tip)
+        radius = 20.0
+        left = rect.left()
+        right = rect.right()
+        top = rect.top()
+        bottom = rect.bottom()
+        path = QPainterPath()
+
+        path.moveTo(left + radius, top)
+        path.lineTo(right - radius, top)
+        path.quadTo(right, top, right, top + radius)
+        path.lineTo(right, bottom - radius)
+        path.quadTo(right, bottom, right - radius, bottom)
+
+        if self.last_direction < 0:
+            path.lineTo(right - 22, bottom)
+            path.cubicTo(
+                right - 20,
+                bottom + 8,
+                tail_tip.x() - 2,
+                tail_tip.y() + 1,
+                tail_tip.x(),
+                tail_tip.y(),
+            )
+            path.cubicTo(
+                tail_tip.x() - 15,
+                tail_tip.y() + 6,
+                right - 44,
+                bottom + 14,
+                right - 54,
+                bottom,
+            )
+        else:
+            path.lineTo(left + 54, bottom)
+            path.cubicTo(
+                left + 44,
+                bottom + 14,
+                tail_tip.x() + 15,
+                tail_tip.y() + 6,
+                tail_tip.x(),
+                tail_tip.y(),
+            )
+            path.cubicTo(
+                tail_tip.x() + 2,
+                tail_tip.y() + 1,
+                left + 20,
+                bottom + 8,
+                left + 22,
+                bottom,
             )
 
-        return bubble_rect, tail
+        path.lineTo(left + radius, bottom)
+        path.quadTo(left, bottom, left, bottom - radius)
+        path.lineTo(left, top + radius)
+        path.quadTo(left, top, left + radius, top)
+        path.closeSubpath()
+        return path
 
     def draw_speech_bubble(self, painter, sprite_rect):
         if not self.message:
             return
-        bubble_rect, tail = self.get_speech_bubble_geometry(sprite_rect)
-        if bubble_rect is None or tail is None:
+        bubble_rect, bubble_path = self.get_speech_bubble_geometry(sprite_rect)
+        if bubble_rect is None or bubble_path is None:
             return
 
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         bubble_fill = QColor(255, 255, 255, int(self.settings["speech_bubble_opacity"]))
-        painter.setPen(QPen(QColor(170, 170, 170, 130), 2))
+        shadow_path = QPainterPath(bubble_path)
+        shadow_path.translate(0, 2)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(0, 0, 0, 35))
+        painter.drawPath(shadow_path)
+        outline = QPen(QColor(135, 135, 135, 190), 2)
+        outline.setCapStyle(Qt.PenCapStyle.RoundCap)
+        outline.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(outline)
         painter.setBrush(bubble_fill)
-        painter.drawPolygon(tail)
-        painter.drawRoundedRect(bubble_rect, 12, 12)
+        painter.drawPath(bubble_path)
         painter.setPen(QColor(45, 45, 45, 225))
         painter.setFont(QFont("Arial", 9))
-        painter.drawText(bubble_rect, Qt.AlignmentFlag.AlignCenter, self.message)
+        text_rect = bubble_rect.adjusted(8, 4, -8, -4)
+        painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, self.message)
         painter.restore()
 
     def draw_menu(self, painter, sprite_rect):
-        if not self.menu_visible:
+        if not self.activity.menu_open:
             return
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -186,7 +253,11 @@ class CompanionRenderingMixin:
 
     def draw_nomzy_sprite(self, painter, scaled_sprite, sprite_rect):
         painter.save()
-        if self.last_direction < 0:
+        mirror_sprite = (
+            self.last_direction < 0
+            and self.animation_player.clip.mirror_with_direction
+        )
+        if mirror_sprite:
             painter.translate(self.width(), 0)
             painter.scale(-1, 1)
             draw_rect = QRect(
@@ -204,7 +275,7 @@ class CompanionRenderingMixin:
         painter = QPainter(self)
         scaled_sprite = self.get_scaled_sprite()
         sprite_rect = self.get_sprite_rect(scaled_sprite)
-        if self.menu_visible:
+        if self.activity.menu_open:
             self.draw_menu(painter, sprite_rect)
         else:
             self.draw_speech_bubble(painter, sprite_rect)

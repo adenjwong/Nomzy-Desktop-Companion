@@ -1,104 +1,122 @@
 import unittest
 from unittest.mock import patch
 
-from nomzy.animation import AnimationClip, AnimationFrame, AnimationPlayer
+from nomzy.activity import (
+    CompanionActivityMixin,
+    CompanionEvent,
+    CompanionState,
+    CompanionStateMachine,
+)
+from nomzy.animation import (
+    AnimationClip,
+    AnimationFrame,
+    AnimationPlayback,
+    AnimationPlayer,
+)
 from nomzy.behavior import CompanionBehaviorMixin
+from nomzy.scheduling import BehaviorAction, BehaviorScheduler
+
+
+ACTIVITY_CLIPS = {
+    CompanionState.IDLE: "idle",
+    CompanionState.WALKING: "walk",
+    CompanionState.BLINKING: "blink",
+    CompanionState.SITTING: "sit",
+    CompanionState.SLEEPING: "sleep",
+    CompanionState.TALKING: "talk",
+    CompanionState.DRAGGING: "drag",
+    CompanionState.PAUSED: "paused",
+    CompanionState.MENU: "paused",
+}
 
 
 def one_frame_clip(name):
+    playback = (
+        AnimationPlayback.LOOP
+        if name in {"idle", "walk", "paused"}
+        else AnimationPlayback.RETURN
+    )
     return AnimationClip(
         name=name,
         frames=(AnimationFrame(sprite=0, duration_ms=100),),
-        loop=name in {"idle", "walk", "paused"},
+        playback=playback,
     )
 
 
-class BehaviorHarness(CompanionBehaviorMixin):
+class BehaviorHarness(CompanionActivityMixin, CompanionBehaviorMixin):
     def __init__(self):
         self.settings = {
             "walk_interval_seconds": 10,
+            "walk_min_ticks": 10,
+            "walk_max_ticks": 35,
             "rest_min_interval_ms": 45000,
             "rest_max_interval_ms": 120000,
             "sleep_chance_percent": 30,
         }
-        self.movement_state = "idle"
-        self.idle_ticks_remaining = 10
-        self.walk_ticks_remaining = 0
+        self.activity = CompanionStateMachine(ACTIVITY_CLIPS)
+        self.scheduler = BehaviorScheduler(self.settings)
         self.walk_step_x = 0
         self.walk_step_y = 0
-        self.ambient_animation = None
-        self.active_reaction = None
-        self.paused = False
-        self.menu_visible = False
         self.message = ""
-        self.talk_animation_pending = False
-        self.is_dragging = False
-        self.drag_animation_pending = False
-        self.blink_cooldown_ms = 5000
-        self.rest_cooldown_ms = 5000
         clips = {
             name: one_frame_clip(name)
-            for name in ("idle", "blink", "sit", "sleep", "drag", "paused")
+            for name in (
+                "idle",
+                "walk",
+                "blink",
+                "sit",
+                "sleep",
+                "talk",
+                "pet",
+                "drag",
+                "paused",
+            )
         }
         self.animation_player = AnimationPlayer(clips, "idle")
 
 
-class RestBehaviorTests(unittest.TestCase):
-    def test_walk_interval_has_small_natural_variation(self):
+class BehaviorExecutionTests(unittest.TestCase):
+    def test_dragging_cancels_scheduled_walk_and_plays_drag_animation(self):
         harness = BehaviorHarness()
+        harness.activity.dispatch(CompanionEvent.START_WALKING)
+        harness.scheduler.start_walk()
 
-        with patch("nomzy.behavior.random.randint", return_value=250) as randint:
-            cooldown = harness.random_walk_cooldown_ticks()
-
-        self.assertEqual(cooldown, 250)
-        randint.assert_called_once_with(188, 312)
-
-    def test_sitting_and_sleeping_pause_the_walk_countdown(self):
-        harness = BehaviorHarness()
-
-        for animation in ("sit", "sleep"):
-            harness.ambient_animation = animation
-            harness.update_movement()
-            self.assertEqual(harness.idle_ticks_remaining, 10)
-
-    def test_dragging_pauses_movement_and_plays_drag_animation(self):
-        harness = BehaviorHarness()
-        harness.is_dragging = True
-        harness.drag_animation_pending = True
-
-        harness.update_movement()
+        harness.transition_activity(CompanionEvent.START_DRAGGING)
         harness.update_animation(0)
 
-        self.assertEqual(harness.idle_ticks_remaining, 10)
+        self.assertEqual(harness.scheduler.walk_ticks_remaining, 0)
         self.assertEqual(harness.animation_player.clip_name, "drag")
-        self.assertFalse(harness.drag_animation_pending)
 
-    def test_rest_animation_starts_when_its_cooldown_expires(self):
+    def test_scheduled_rest_action_starts_selected_animation(self):
         harness = BehaviorHarness()
-        harness.rest_cooldown_ms = 1
 
-        with (
-            patch.object(harness, "choose_rest_animation", return_value="sit"),
-            patch.object(harness, "random_rest_cooldown", return_value=60000),
-        ):
-            harness.update_animation(40)
+        with patch.object(harness, "choose_rest_animation", return_value="sit"):
+            harness.perform_scheduled_action(BehaviorAction.REST)
+            harness.update_animation(0)
 
-        self.assertEqual(harness.ambient_animation, "sit")
+        self.assertEqual(harness.activity.state, CompanionState.SITTING)
         self.assertEqual(harness.animation_player.clip_name, "sit")
-        self.assertEqual(harness.rest_cooldown_ms, 60000)
 
-    def test_rest_takes_priority_when_blink_is_also_due(self):
+    def test_scheduled_blink_action_starts_blinking(self):
         harness = BehaviorHarness()
-        harness.blink_cooldown_ms = 1
-        harness.rest_cooldown_ms = 1
 
-        with (
-            patch.object(harness, "choose_rest_animation", return_value="sleep"),
-            patch.object(harness, "random_rest_cooldown", return_value=60000),
-        ):
-            harness.update_animation(40)
+        harness.perform_scheduled_action(BehaviorAction.BLINK)
+        harness.update_animation(0)
 
-        self.assertEqual(harness.ambient_animation, "sleep")
+        self.assertEqual(harness.activity.state, CompanionState.BLINKING)
+        self.assertEqual(harness.animation_player.clip_name, "blink")
+
+    def test_hide_message_action_clears_speech_state(self):
+        harness = BehaviorHarness()
+        harness.message = "hello"
+        harness.activity.dispatch(CompanionEvent.START_TALKING)
+        harness.scheduler.message_ticks_remaining = 1
+
+        harness.perform_scheduled_action(BehaviorAction.HIDE_MESSAGE)
+
+        self.assertEqual(harness.message, "")
+        self.assertEqual(harness.scheduler.message_ticks_remaining, 0)
+        self.assertEqual(harness.activity.state, CompanionState.IDLE)
 
     def test_sleep_chance_is_clamped(self):
         harness = BehaviorHarness()

@@ -12,10 +12,14 @@ if str(SRC_DIR) not in sys.path:
 
 from nomzy.companion import NomzyDog  # noqa: E402
 from nomzy.macos_overlay import configure_macos_application  # noqa: E402
+from nomzy.paths import APPLICATION_NAME, ORGANIZATION_NAME  # noqa: E402
 
 
 def main():
     app = QApplication(sys.argv)
+    app.setOrganizationName(ORGANIZATION_NAME)
+    app.setApplicationName(APPLICATION_NAME)
+    app.setApplicationDisplayName("Nomzy")
     app.setQuitOnLastWindowClosed(False)
 
     configure_macos_application(hide_dock_icon=True)

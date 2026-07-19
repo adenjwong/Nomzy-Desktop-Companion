@@ -1,6 +1,5 @@
-import json
-
-from .paths import get_settings_path
+from .paths import get_legacy_settings_path, get_settings_path
+from .storage import load_user_json, write_json_atomic
 
 
 DEFAULT_SETTINGS = {
@@ -52,31 +51,18 @@ DEFAULT_SETTINGS = {
 
 
 def load_settings() -> dict:
-    settings_path = get_settings_path()
     settings = DEFAULT_SETTINGS.copy()
-
-    if not settings_path.exists():
-        return settings
-
-    try:
-        with open(settings_path, "r", encoding="utf-8") as file:
-            user_settings = json.load(file)
-
-        if isinstance(user_settings, dict):
-            settings.update(user_settings)
-
-    except Exception:
-        pass
+    user_settings = load_user_json(
+        get_settings_path(),
+        get_legacy_settings_path(),
+    )
+    if user_settings is not None:
+        settings.update(user_settings)
 
     return settings
 
 
 def save_settings(settings: dict) -> None:
-    settings_path = get_settings_path()
-    settings_path.parent.mkdir(parents=True, exist_ok=True)
-
     clean_settings = DEFAULT_SETTINGS.copy()
     clean_settings.update(settings)
-
-    with open(settings_path, "w", encoding="utf-8") as file:
-        json.dump(clean_settings, file, indent=2)
+    write_json_atomic(get_settings_path(), clean_settings)

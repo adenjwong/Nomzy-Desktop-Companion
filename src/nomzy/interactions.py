@@ -4,6 +4,7 @@ from PySide6.QtCore import QRect, Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QApplication, QMenu
 
+from .activity import CompanionEvent
 from .settings_window import NomzySettingsWindow
 
 
@@ -14,13 +15,13 @@ class CompanionInteractionMixin:
     """Radial menu actions, context menu, and mouse interaction."""
 
     def get_menu_buttons(self, sprite_rect):
-        if not self.menu_visible:
+        if not self.activity.menu_open:
             return []
 
         center = sprite_rect.center()
         radius = int(self.settings.get("menu_arc_radius", 102))
         button_radius = int(self.settings["menu_button_radius"])
-        pause_label = "Resume" if self.paused else "Pause"
+        pause_label = "Resume" if self.activity.paused else "Pause"
         items = [
             ("settings", "Settings", 210),
             ("pause", pause_label, 250),
@@ -61,17 +62,14 @@ class CompanionInteractionMixin:
         return None
 
     def toggle_menu(self):
-        self.menu_visible = not self.menu_visible
-        if self.menu_visible:
-            self.message = ""
-            self.message_ticks_remaining = 0
-            self.movement_state = "idle"
-            self.walk_ticks_remaining = 0
-            self.walk_step_x = 0
-            self.walk_step_y = 0
-        else:
+        if self.activity.menu_open:
+            self.transition_activity(CompanionEvent.CLOSE_MENU)
             self.pending_menu_action = None
             self.close_menu_on_release = False
+        else:
+            self.message = ""
+            self.scheduler.clear_message()
+            self.transition_activity(CompanionEvent.OPEN_MENU)
 
         self.update_window_size_for_state()
         self.update_animation(0)
@@ -80,9 +78,9 @@ class CompanionInteractionMixin:
         self.enforce_always_on_top()
 
     def close_menu(self):
-        if not self.menu_visible:
+        if not self.activity.menu_open:
             return
-        self.menu_visible = False
+        self.transition_activity(CompanionEvent.CLOSE_MENU)
         self.pending_menu_action = None
         self.close_menu_on_release = False
         self.update_window_size_for_state()
@@ -96,7 +94,8 @@ class CompanionInteractionMixin:
             self.open_settings_window()
         elif action == "pause":
             self.toggle_pause()
-            self.say_random_speech("pause" if self.paused else "resume")
+            category = "pause" if self.activity.paused else "resume"
+            self.say_random_speech(category)
         elif action == "reset":
             self.reset_position()
             self.say_random_speech("reset")
@@ -121,31 +120,22 @@ class CompanionInteractionMixin:
         self.settings_window.activateWindow()
 
     def begin_dragging(self):
-        if self.is_dragging:
+        if self.activity.is_dragging:
             return
 
-        self.is_dragging = True
-        self.drag_animation_pending = True
-        self.menu_visible = False
-        self.movement_state = "idle"
-        self.walk_ticks_remaining = 0
-        self.walk_step_x = 0
-        self.walk_step_y = 0
-        self.idle_ticks_remaining = self.random_walk_cooldown_ticks()
-        self.active_reaction = None
-        self.ambient_animation = None
+        self.transition_activity(CompanionEvent.START_DRAGGING)
+        self.pending_menu_action = None
+        self.close_menu_on_release = False
         self.update_animation(0)
         self.update_window_size_for_state()
         self.update_overlay_mask()
         self.update()
 
     def finish_dragging(self):
-        if not self.is_dragging:
+        if not self.activity.is_dragging:
             return
 
-        self.is_dragging = False
-        self.drag_animation_pending = False
-        self.idle_ticks_remaining = self.random_walk_cooldown_ticks()
+        self.transition_activity(CompanionEvent.STOP_DRAGGING)
         self.update_animation(0)
         self.update_overlay_mask()
         self.update()
@@ -172,7 +162,7 @@ class CompanionInteractionMixin:
         self.pending_menu_action = None
         self.close_menu_on_release = False
 
-        if self.menu_visible:
+        if self.activity.menu_open:
             self.pending_menu_action = self.hit_menu_button(local_point)
             if self.pending_menu_action is not None:
                 event.accept()
@@ -184,8 +174,6 @@ class CompanionInteractionMixin:
 
         self.mouse_press_global = event.globalPosition().toPoint()
         self.drag_direction_x = self.mouse_press_global.x()
-        self.is_dragging = False
-        self.drag_animation_pending = False
         event.accept()
 
     def mouseMoveEvent(self, event):
@@ -216,7 +204,7 @@ class CompanionInteractionMixin:
             self.close_menu()
             event.accept()
             return
-        if self.is_dragging:
+        if self.activity.is_dragging:
             self.finish_dragging()
         elif self.point_is_on_sprite(event.position().toPoint()):
             self.toggle_menu()
@@ -226,7 +214,10 @@ class CompanionInteractionMixin:
         menu = QMenu(self)
         actions = [
             ("Settings", self.open_settings_window),
-            ("Resume Nomzy" if self.paused else "Pause Nomzy", self.toggle_pause),
+            (
+                "Resume Nomzy" if self.activity.paused else "Pause Nomzy",
+                self.toggle_pause,
+            ),
             ("Say Something Now", lambda: self.say_random_speech("talk")),
             ("Reset Position", self.reset_position),
         ]
@@ -241,5 +232,10 @@ class CompanionInteractionMixin:
         menu.exec(event.globalPos())
 
     def toggle_pause(self):
-        self.paused = not self.paused
+        event = (
+            CompanionEvent.RESUME
+            if self.activity.paused
+            else CompanionEvent.PAUSE
+        )
+        self.transition_activity(event)
         self.update_animation(0)

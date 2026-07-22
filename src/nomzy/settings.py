@@ -30,7 +30,7 @@ DEFAULT_SETTINGS = {
     "speech_bubble_blocks_input": True,
 
     "movement_enabled": True,
-    "walk_interval_seconds": 10,
+    "walk_interval_seconds": 5,
     "walk_min_ticks": 10,
     "walk_max_ticks": 35,
 

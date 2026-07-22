@@ -10,6 +10,7 @@ SRC_DIR = CURRENT_FILE.parents[1]
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
+from nomzy import __version__  # noqa: E402
 from nomzy.companion import NomzyDog  # noqa: E402
 from nomzy.macos_overlay import configure_macos_application  # noqa: E402
 from nomzy.paths import APPLICATION_NAME, ORGANIZATION_NAME  # noqa: E402
@@ -20,6 +21,7 @@ def main():
     app.setOrganizationName(ORGANIZATION_NAME)
     app.setApplicationName(APPLICATION_NAME)
     app.setApplicationDisplayName("Nomzy")
+    app.setApplicationVersion(__version__)
     app.setQuitOnLastWindowClosed(False)
 
     configure_macos_application(hide_dock_icon=True)

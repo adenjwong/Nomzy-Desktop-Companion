@@ -86,7 +86,7 @@ class BehaviorScheduler:
         self.walk_ticks_remaining = 0
         interval_seconds = max(
             1,
-            int(self.settings.get("walk_interval_seconds", 10)),
+            int(self.settings.get("walk_interval_seconds", 5)),
         )
         interval_ticks = interval_seconds * TICKS_PER_SECOND
         variation = max(1, round(interval_ticks * 0.25))

@@ -84,6 +84,23 @@ class BehaviorSchedulerTests(unittest.TestCase):
             BehaviorAction.HIDE_MESSAGE,
         )
 
+    def test_visible_message_expires_when_speech_is_disabled(self):
+        self.scheduler.speech_cooldown_ticks = 10
+        self.scheduler.message_ticks_remaining = 1
+
+        action = self.scheduler.next_speech_action(enabled=False)
+
+        self.assertEqual(action, BehaviorAction.HIDE_MESSAGE)
+        self.assertEqual(self.scheduler.speech_cooldown_ticks, 10)
+
+    def test_disabled_speech_does_not_advance_its_cooldown(self):
+        self.scheduler.speech_cooldown_ticks = 10
+
+        action = self.scheduler.next_speech_action(enabled=False)
+
+        self.assertIsNone(action)
+        self.assertEqual(self.scheduler.speech_cooldown_ticks, 10)
+
     def test_settings_update_limits_existing_speech_cooldown(self):
         self.scheduler.speech_cooldown_ticks = 4000
 

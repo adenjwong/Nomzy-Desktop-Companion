@@ -96,13 +96,13 @@ class BehaviorScheduler:
         )
 
     def next_speech_action(self, enabled: bool) -> BehaviorAction | None:
-        if not enabled:
-            return None
-
         if self.message_ticks_remaining > 0:
             self.message_ticks_remaining -= 1
             if self.message_ticks_remaining <= 0:
                 return BehaviorAction.HIDE_MESSAGE
+            return None
+
+        if not enabled:
             return None
 
         self.speech_cooldown_ticks -= 1

@@ -92,17 +92,22 @@ class NomzyDog(
 
     def tick(self):
         elapsed_ms = max(0, min(self.animation_clock.restart(), 250))
+        background_updates_enabled = not self.activity.blocks_background_updates
 
-        if not self.activity.blocks_background_updates:
+        if background_updates_enabled:
             movement_action = self.scheduler.next_movement_action(
                 self.activity.state,
                 enabled=bool(self.settings["movement_enabled"]),
             )
             self.perform_scheduled_action(movement_action)
-            speech_action = self.scheduler.next_speech_action(
-                enabled=bool(self.settings["speech_enabled"]),
-            )
-            self.perform_scheduled_action(speech_action)
+
+        speech_action = self.scheduler.next_speech_action(
+            enabled=(
+                background_updates_enabled
+                and bool(self.settings["speech_enabled"])
+            ),
+        )
+        self.perform_scheduled_action(speech_action)
 
         self.resolve_finished_animation()
         ambient_action = self.scheduler.next_ambient_action(

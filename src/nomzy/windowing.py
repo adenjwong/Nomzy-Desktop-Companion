@@ -58,10 +58,10 @@ class CompanionWindowMixin:
         if "sprite_center_x" not in state or "sprite_center_y" not in state:
             return None
 
-        self.last_direction = int(state.get("last_direction", 1))
+        self.last_direction = state["last_direction"]
         desired_center = QPoint(
-            int(state["sprite_center_x"]),
-            int(state["sprite_center_y"]),
+            state["sprite_center_x"],
+            state["sprite_center_y"],
         )
         scaled_sprite = self.get_scaled_sprite()
         sprite_rect = self.get_sprite_rect(

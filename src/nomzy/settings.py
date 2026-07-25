@@ -49,20 +49,96 @@ DEFAULT_SETTINGS = {
     "speech_bubble_opacity": 145,
 }
 
+INTEGER_LIMITS = {
+    "window_width": (360, 4096),
+    "window_height": (190, 2160),
+    "menu_window_width": (360, 4096),
+    "menu_window_height": (300, 2160),
+    "menu_button_radius": (12, 100),
+    "menu_arc_radius": (48, 1000),
+    "sprite_width": (60, 180),
+    "sprite_height": (46, 139),
+    "sprite_click_padding": (0, 64),
+    "walk_interval_seconds": (5, 300),
+    "walk_min_ticks": (1, 250),
+    "walk_max_ticks": (1, 250),
+    "blink_min_interval_ms": (250, 600000),
+    "blink_max_interval_ms": (250, 600000),
+    "rest_min_interval_ms": (1000, 3600000),
+    "rest_max_interval_ms": (1000, 3600000),
+    "sleep_chance_percent": (0, 100),
+    "speech_min_ticks": (25, 180000),
+    "speech_max_ticks": (25, 180000),
+    "speech_min_duration_ticks": (25, 750),
+    "speech_max_duration_ticks": (25, 750),
+    "speech_bubble_opacity": (0, 255),
+}
+
+ORDERED_SETTING_PAIRS = (
+    ("walk_min_ticks", "walk_max_ticks"),
+    ("blink_min_interval_ms", "blink_max_interval_ms"),
+    ("rest_min_interval_ms", "rest_max_interval_ms"),
+    ("speech_min_ticks", "speech_max_ticks"),
+    ("speech_min_duration_ticks", "speech_max_duration_ticks"),
+)
+
+
+def normalize_settings(settings: dict | None) -> dict:
+    raw_settings = settings if isinstance(settings, dict) else {}
+    normalized = {}
+
+    for key, default in DEFAULT_SETTINGS.items():
+        value = raw_settings.get(key, default)
+
+        if key in INTEGER_LIMITS:
+            if type(value) is not int:
+                normalized[key] = default
+                continue
+            minimum, maximum = INTEGER_LIMITS[key]
+            normalized[key] = max(minimum, min(value, maximum))
+        elif type(default) is bool:
+            normalized[key] = value if type(value) is bool else default
+        elif key == "user_name":
+            normalized[key] = (
+                value.strip()[:80]
+                if isinstance(value, str)
+                else default
+            )
+        elif key == "macos_window_level":
+            allowed_levels = {"floating", "status", "screen_saver"}
+            normalized[key] = (
+                value
+                if isinstance(value, str) and value in allowed_levels
+                else default
+            )
+        else:
+            normalized[key] = value if isinstance(value, type(default)) else default
+
+    for minimum_key, maximum_key in ORDERED_SETTING_PAIRS:
+        if normalized[minimum_key] > normalized[maximum_key]:
+            normalized[minimum_key], normalized[maximum_key] = (
+                normalized[maximum_key],
+                normalized[minimum_key],
+            )
+
+    return normalized
+
 
 def load_settings() -> dict:
-    settings = DEFAULT_SETTINGS.copy()
+    settings_path = get_settings_path()
     user_settings = load_user_json(
-        get_settings_path(),
+        settings_path,
         get_legacy_settings_path(),
     )
-    if user_settings is not None:
-        settings.update(user_settings)
+    settings = normalize_settings(user_settings)
 
+    if user_settings != settings:
+        try:
+            write_json_atomic(settings_path, settings)
+        except OSError:
+            pass
     return settings
 
 
 def save_settings(settings: dict) -> None:
-    clean_settings = DEFAULT_SETTINGS.copy()
-    clean_settings.update(settings)
-    write_json_atomic(get_settings_path(), clean_settings)
+    write_json_atomic(get_settings_path(), normalize_settings(settings))

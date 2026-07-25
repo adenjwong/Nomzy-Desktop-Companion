@@ -5,8 +5,18 @@ from pathlib import Path
 from unittest.mock import patch
 
 from nomzy.paths import get_user_data_dir
-from nomzy.settings import DEFAULT_SETTINGS, load_settings, save_settings
-from nomzy.state import load_state, save_state
+from nomzy.settings import (
+    DEFAULT_SETTINGS,
+    load_settings,
+    normalize_settings,
+    save_settings,
+)
+from nomzy.state import (
+    STATE_COORDINATE_LIMIT,
+    load_state,
+    normalize_state,
+    save_state,
+)
 from nomzy.storage import read_json_object, write_json_atomic
 
 
@@ -48,10 +58,7 @@ class PersistenceTests(unittest.TestCase):
         settings = load_settings()
 
         self.assertEqual(settings["walk_interval_seconds"], 5)
-        self.assertEqual(
-            read_json_object(self.user_settings),
-            {"walk_interval_seconds": 5},
-        )
+        self.assertEqual(read_json_object(self.user_settings), settings)
 
     def test_existing_user_settings_take_precedence(self):
         self.write_json(self.legacy_settings, {"walk_interval_seconds": 5})
@@ -87,19 +94,123 @@ class PersistenceTests(unittest.TestCase):
             settings["walk_interval_seconds"],
             DEFAULT_SETTINGS["walk_interval_seconds"],
         )
-        self.assertEqual(self.user_settings.read_text(encoding="utf-8"), "not json")
+        self.assertEqual(
+            read_json_object(self.user_settings),
+            DEFAULT_SETTINGS,
+        )
+
+    def test_malformed_settings_are_repaired_individually(self):
+        self.write_json(
+            self.user_settings,
+            {
+                "walk_interval_seconds": "invalid",
+                "sprite_width": 999,
+                "speech_enabled": "false",
+                "sleep_chance_percent": -20,
+                "speech_bubble_opacity": 200,
+                "user_name": "  Aden  ",
+                "macos_window_level": ["invalid"],
+                "speech_min_ticks": 9000,
+                "speech_max_ticks": 1000,
+                "unknown_setting": True,
+            },
+        )
+
+        settings = load_settings()
+
+        self.assertEqual(settings["walk_interval_seconds"], 5)
+        self.assertEqual(settings["sprite_width"], 180)
+        self.assertTrue(settings["speech_enabled"])
+        self.assertEqual(settings["sleep_chance_percent"], 0)
+        self.assertEqual(settings["speech_bubble_opacity"], 200)
+        self.assertEqual(settings["user_name"], "Aden")
+        self.assertEqual(settings["macos_window_level"], "status")
+        self.assertEqual(settings["speech_min_ticks"], 1000)
+        self.assertEqual(settings["speech_max_ticks"], 9000)
+        self.assertNotIn("unknown_setting", settings)
+        self.assertEqual(read_json_object(self.user_settings), settings)
+
+    def test_saving_settings_normalizes_values(self):
+        save_settings(
+            DEFAULT_SETTINGS
+            | {
+                "sprite_width": 10,
+                "always_on_top": False,
+                "unknown_setting": True,
+            }
+        )
+
+        saved_settings = read_json_object(self.user_settings)
+
+        self.assertEqual(saved_settings["sprite_width"], 60)
+        self.assertFalse(saved_settings["always_on_top"])
+        self.assertNotIn("unknown_setting", saved_settings)
+
+    def test_normalize_settings_uses_defaults_for_non_objects(self):
+        self.assertEqual(normalize_settings(None), DEFAULT_SETTINGS)
 
     def test_state_is_migrated_and_subsequent_saves_use_the_user_path(self):
-        self.write_json(self.legacy_state, {"sprite_center_x": 100})
+        legacy_state = {
+            "sprite_center_x": 100,
+            "sprite_center_y": 200,
+            "last_direction": -1,
+        }
+        self.write_json(self.legacy_state, legacy_state)
 
-        self.assertEqual(load_state(), {"sprite_center_x": 100})
+        self.assertEqual(load_state(), legacy_state)
 
-        save_state({"sprite_center_x": 200})
+        saved_state = {
+            "sprite_center_x": 200,
+            "sprite_center_y": 300,
+            "last_direction": 1,
+        }
+        save_state(saved_state)
 
-        self.assertEqual(load_state(), {"sprite_center_x": 200})
+        self.assertEqual(load_state(), saved_state)
         self.assertEqual(
             read_json_object(self.legacy_state),
-            {"sprite_center_x": 100},
+            legacy_state,
+        )
+
+    def test_invalid_position_is_removed_for_safe_fallback(self):
+        self.write_json(
+            self.user_state,
+            {
+                "sprite_center_x": "invalid",
+                "sprite_center_y": 200,
+                "last_direction": -1,
+            },
+        )
+
+        self.assertEqual(load_state(), {})
+        self.assertEqual(read_json_object(self.user_state), {})
+
+    def test_state_coordinates_are_clamped_and_direction_is_repaired(self):
+        self.write_json(
+            self.user_state,
+            {
+                "sprite_center_x": STATE_COORDINATE_LIMIT * 2,
+                "sprite_center_y": -STATE_COORDINATE_LIMIT * 2,
+                "last_direction": 0,
+            },
+        )
+
+        state = load_state()
+
+        self.assertEqual(state["sprite_center_x"], STATE_COORDINATE_LIMIT)
+        self.assertEqual(state["sprite_center_y"], -STATE_COORDINATE_LIMIT)
+        self.assertEqual(state["last_direction"], 1)
+        self.assertEqual(read_json_object(self.user_state), state)
+
+    def test_normalize_state_rejects_non_integer_coordinates(self):
+        self.assertEqual(
+            normalize_state(
+                {
+                    "sprite_center_x": True,
+                    "sprite_center_y": 200,
+                }
+            ),
+            {},
         )
 
     def test_atomic_write_leaves_only_the_completed_file(self):

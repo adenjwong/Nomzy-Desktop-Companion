@@ -137,6 +137,8 @@ class CompanionInteractionMixin:
 
         self.transition_activity(CompanionEvent.STOP_DRAGGING)
         self.update_animation(0)
+        self.update_window_size_for_state()
+        self.ensure_visible_on_available_screen()
         self.update_overlay_mask()
         self.update()
 

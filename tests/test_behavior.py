@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import patch
 
+from PySide6.QtCore import QPoint, QRect
+
 from nomzy.activity import (
     CompanionActivityMixin,
     CompanionEvent,
@@ -43,6 +45,14 @@ def one_frame_clip(name):
     )
 
 
+class FakeScreen:
+    def __init__(self, geometry):
+        self.geometry = geometry
+
+    def availableGeometry(self):
+        return self.geometry
+
+
 class BehaviorHarness(CompanionActivityMixin, CompanionBehaviorMixin):
     def __init__(self):
         self.settings = {
@@ -58,6 +68,10 @@ class BehaviorHarness(CompanionActivityMixin, CompanionBehaviorMixin):
         self.walk_step_x = 0
         self.walk_step_y = 0
         self.message = ""
+        self.window_position = QPoint(0, 0)
+        self.window_width = 140
+        self.window_height = 115
+        self.current_screen = FakeScreen(QRect(0, 0, 1920, 1080))
         clips = {
             name: one_frame_clip(name)
             for name in (
@@ -73,6 +87,24 @@ class BehaviorHarness(CompanionActivityMixin, CompanionBehaviorMixin):
             )
         }
         self.animation_player = AnimationPlayer(clips, "idle")
+
+    def x(self):
+        return self.window_position.x()
+
+    def y(self):
+        return self.window_position.y()
+
+    def width(self):
+        return self.window_width
+
+    def height(self):
+        return self.window_height
+
+    def move(self, x, y):
+        self.window_position = QPoint(x, y)
+
+    def get_current_screen(self):
+        return self.current_screen
 
 
 class BehaviorExecutionTests(unittest.TestCase):
@@ -126,6 +158,34 @@ class BehaviorExecutionTests(unittest.TestCase):
 
         harness.settings["sleep_chance_percent"] = 110
         self.assertEqual(harness.choose_rest_animation(), "sleep")
+
+    def test_walk_bounces_inside_a_negative_origin_screen(self):
+        harness = BehaviorHarness()
+        harness.current_screen = FakeScreen(QRect(-1920, 0, 1920, 1080))
+        harness.window_position = QPoint(-1920, 200)
+        harness.walk_step_x = -1
+        harness.scheduler.walk_ticks_remaining = 2
+        harness.activity.dispatch(CompanionEvent.START_WALKING)
+
+        harness.walk()
+
+        self.assertEqual(harness.window_position, QPoint(-1920, 200))
+        self.assertEqual(harness.walk_step_x, 1)
+        self.assertEqual(harness.last_direction, 1)
+
+    def test_walk_uses_the_current_screens_right_edge(self):
+        harness = BehaviorHarness()
+        harness.current_screen = FakeScreen(QRect(-1920, 0, 1920, 1080))
+        harness.window_position = QPoint(-140, 200)
+        harness.walk_step_x = 1
+        harness.scheduler.walk_ticks_remaining = 2
+        harness.activity.dispatch(CompanionEvent.START_WALKING)
+
+        harness.walk()
+
+        self.assertEqual(harness.window_position, QPoint(-140, 200))
+        self.assertEqual(harness.walk_step_x, -1)
+        self.assertEqual(harness.last_direction, -1)
 
 
 if __name__ == "__main__":

@@ -83,6 +83,7 @@ class NomzyDog(
             1500,
             self.apply_native_overlay_style,
         )
+        self.initialize_screen_tracking()
 
     def _start_timer(self, interval_ms, callback):
         timer = QTimer(self)

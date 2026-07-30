@@ -1,7 +1,8 @@
-from PySide6.QtCore import QPoint
+from PySide6.QtCore import QPoint, QTimer
 from PySide6.QtWidgets import QApplication
 
 from .activity import CompanionState
+from .displays import clamp_window_position, screen_index_for_point
 from .macos_overlay import configure_macos_overlay_window, is_macos
 from .state import load_state, save_state as write_state
 
@@ -17,8 +18,99 @@ class CompanionWindowMixin:
         self.menu_window_width = int(self.settings["menu_window_width"])
         self.menu_window_height = int(self.settings["menu_window_height"])
 
+    def initialize_screen_tracking(self):
+        self._tracked_screens = []
+        application = QApplication.instance()
+        if application is None:
+            return
+
+        application.screenAdded.connect(self._handle_screen_added)
+        application.screenRemoved.connect(self._handle_screen_removed)
+        application.primaryScreenChanged.connect(
+            self._handle_primary_screen_changed
+        )
+        for screen in application.screens():
+            self._track_screen(screen)
+
+    def _track_screen(self, screen):
+        if any(tracked is screen for tracked in self._tracked_screens):
+            return
+        self._tracked_screens.append(screen)
+        screen.availableGeometryChanged.connect(
+            self._handle_screen_geometry_changed
+        )
+
+    def _handle_screen_added(self, screen):
+        self._track_screen(screen)
+
+    def _handle_screen_removed(self, screen):
+        self._tracked_screens = [
+            tracked for tracked in self._tracked_screens if tracked is not screen
+        ]
+        QTimer.singleShot(0, self.ensure_visible_on_available_screen)
+
+    def _handle_primary_screen_changed(self, screen):
+        if screen is not None:
+            self._track_screen(screen)
+        QTimer.singleShot(0, self.ensure_visible_on_available_screen)
+
+    def _handle_screen_geometry_changed(self, geometry):
+        self.ensure_visible_on_available_screen()
+
+    def get_screen_for_global_point(self, point):
+        screens = QApplication.screens()
+        if not screens:
+            return QApplication.primaryScreen()
+
+        geometries = [screen.availableGeometry() for screen in screens]
+        screen_index = screen_index_for_point(geometries, point)
+        if screen_index is None:
+            return QApplication.primaryScreen()
+        return screens[screen_index]
+
+    def get_sprite_global_center(self):
+        scaled_sprite = self.get_scaled_sprite()
+        sprite_rect = self.get_sprite_rect(scaled_sprite)
+        return self.mapToGlobal(sprite_rect.center())
+
+    def get_current_screen(self):
+        return self.get_screen_for_global_point(self.get_sprite_global_center())
+
+    def clamp_position_to_available_screen(
+        self,
+        x,
+        y,
+        reference_point=None,
+    ):
+        position = QPoint(int(x), int(y))
+        if reference_point is None:
+            reference_point = position + QPoint(
+                self.width() // 2,
+                self.height() // 2,
+            )
+
+        screen = self.get_screen_for_global_point(reference_point)
+        if screen is None:
+            return position
+        return clamp_window_position(
+            position,
+            self.size(),
+            screen.availableGeometry(),
+        )
+
+    def ensure_visible_on_available_screen(self):
+        sprite_center = self.get_sprite_global_center()
+        position = self.clamp_position_to_available_screen(
+            self.x(),
+            self.y(),
+            reference_point=sprite_center,
+        )
+        if position != self.pos():
+            self.move(position)
+
     def showEvent(self, event):
         super().showEvent(event)
+        self.ensure_visible_on_available_screen()
         self.apply_native_overlay_style()
         self.update_overlay_mask()
         self.enforce_always_on_top()
@@ -70,13 +162,11 @@ class CompanionWindowMixin:
             force_menu=False,
         )
         top_left = desired_center - sprite_rect.center()
-        return self.clamp_position_to_screen(top_left.x(), top_left.y())
-
-    def clamp_position_to_screen(self, x, y):
-        bounds = QApplication.primaryScreen().availableGeometry()
-        clamped_x = max(bounds.left(), min(x, bounds.right() - self.width()))
-        clamped_y = max(bounds.top(), min(y, bounds.bottom() - self.height()))
-        return QPoint(clamped_x, clamped_y)
+        return self.clamp_position_to_available_screen(
+            top_left.x(),
+            top_left.y(),
+            reference_point=desired_center,
+        )
 
     def closeEvent(self, event):
         self.save_state()
@@ -130,7 +220,14 @@ class CompanionWindowMixin:
             force_message=desired_message,
             force_menu=desired_menu,
         )
-        self.move(old_sprite_center_global - new_sprite_rect.center())
+        desired_position = old_sprite_center_global - new_sprite_rect.center()
+        self.move(
+            self.clamp_position_to_available_screen(
+                desired_position.x(),
+                desired_position.y(),
+                reference_point=old_sprite_center_global,
+            )
+        )
         self.update_overlay_mask()
         self.enforce_always_on_top()
 
@@ -164,16 +261,32 @@ class CompanionWindowMixin:
         self.setFixedSize(desired_width, desired_height)
         new_scaled_sprite = self.get_scaled_sprite()
         new_sprite_rect = self.get_sprite_rect(new_scaled_sprite)
-        self.move(old_sprite_center_global - new_sprite_rect.center())
+        desired_position = old_sprite_center_global - new_sprite_rect.center()
+        self.move(
+            self.clamp_position_to_available_screen(
+                desired_position.x(),
+                desired_position.y(),
+                reference_point=old_sprite_center_global,
+            )
+        )
         self.update_overlay_mask()
         self.update()
         self.enforce_always_on_top()
 
     def reset_position(self):
-        bounds = QApplication.primaryScreen().availableGeometry()
+        screen = self.get_current_screen() or QApplication.primaryScreen()
+        if screen is None:
+            return
+        bounds = screen.availableGeometry()
         scaled_sprite = self.get_scaled_sprite()
         sprite_rect = self.get_sprite_rect(scaled_sprite)
         new_top_left = bounds.center() - sprite_rect.center()
-        self.move(new_top_left)
+        self.move(
+            self.clamp_position_to_available_screen(
+                new_top_left.x(),
+                new_top_left.y(),
+                reference_point=bounds.center(),
+            )
+        )
         self.update_overlay_mask()
         self.enforce_always_on_top()

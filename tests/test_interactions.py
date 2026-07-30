@@ -38,6 +38,7 @@ class InteractionHarness(CompanionActivityMixin, CompanionInteractionMixin):
         self.last_direction = 1
         self.animation_updates = 0
         self.paint_updates = 0
+        self.visibility_checks = 0
 
     def update_animation(self, elapsed_ms):
         self.animation_updates += 1
@@ -47,6 +48,9 @@ class InteractionHarness(CompanionActivityMixin, CompanionInteractionMixin):
 
     def update_overlay_mask(self):
         pass
+
+    def ensure_visible_on_available_screen(self):
+        self.visibility_checks += 1
 
     def update(self):
         self.paint_updates += 1
@@ -88,6 +92,7 @@ class DragInteractionTests(unittest.TestCase):
 
         self.assertEqual(harness.activity.state, CompanionState.IDLE)
         self.assertEqual(harness.animation_updates, 1)
+        self.assertEqual(harness.visibility_checks, 1)
 
 
 if __name__ == "__main__":

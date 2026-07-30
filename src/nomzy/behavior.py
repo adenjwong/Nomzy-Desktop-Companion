@@ -79,21 +79,24 @@ class CompanionBehaviorMixin:
     def walk(self):
         new_x = self.x() + self.walk_step_x
         new_y = self.y() + self.walk_step_y
-        screen = self.screen() or QApplication.primaryScreen()
+        screen = self.get_current_screen() or QApplication.primaryScreen()
+        if screen is None:
+            self.stop_walking()
+            return
         bounds = screen.availableGeometry()
         left = bounds.left()
-        right = bounds.right() - self.width()
+        right = bounds.right() - self.width() + 1
         top = bounds.top()
-        bottom = bounds.bottom() - self.height()
+        bottom = bounds.bottom() - self.height() + 1
 
-        if new_x <= left or new_x >= right:
+        if new_x < left or new_x > right:
             self.walk_step_x *= -1
             new_x = max(left, min(new_x, right))
 
             if self.walk_step_x != 0:
                 self.last_direction = 1 if self.walk_step_x > 0 else -1
 
-        if new_y <= top or new_y >= bottom:
+        if new_y < top or new_y > bottom:
             self.walk_step_y *= -1
             new_y = max(top, min(new_y, bottom))
 

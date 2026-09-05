@@ -1,1 +1,2 @@
-pyobjc-framework-Cocoa
+PySide6>=6.5,<7
+pyobjc-framework-Cocoa>=10,<13; sys_platform == "darwin"

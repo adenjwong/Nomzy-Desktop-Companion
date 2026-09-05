@@ -1,32 +1,36 @@
+import logging
 import sys
-from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
 
-
-CURRENT_FILE = Path(__file__).resolve()
-SRC_DIR = CURRENT_FILE.parents[1]
-
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
-
-from nomzy import __version__  # noqa: E402
-from nomzy.companion import NomzyDog  # noqa: E402
-from nomzy.macos_overlay import configure_macos_application  # noqa: E402
-from nomzy.paths import APPLICATION_NAME, ORGANIZATION_NAME  # noqa: E402
+from . import __version__
+from .companion import NomzyDog
+from .macos_overlay import configure_macos_application
+from .paths import APPLICATION_NAME, ORGANIZATION_NAME
 
 
-def main():
-    app = QApplication(sys.argv)
+LOGGER = logging.getLogger(__name__)
+
+
+def configure_logging() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+
+def run(argv: list[str] | None = None) -> int:
+    app = QApplication(sys.argv if argv is None else argv)
     app.setOrganizationName(ORGANIZATION_NAME)
     app.setApplicationName(APPLICATION_NAME)
     app.setApplicationDisplayName("Nomzy")
     app.setApplicationVersion(__version__)
     app.setQuitOnLastWindowClosed(False)
 
-    configure_macos_application(hide_dock_icon=True)
-
     nomzy = NomzyDog()
+    configure_macos_application(
+        hide_dock_icon=bool(nomzy.settings.get("macos_hide_dock_icon", True))
+    )
     app.aboutToQuit.connect(nomzy.save_state)
 
     saved_position = nomzy.get_saved_position()
@@ -42,8 +46,17 @@ def main():
     nomzy.apply_native_overlay_style()
     nomzy.enforce_always_on_top()
 
-    sys.exit(app.exec())
+    return app.exec()
+
+
+def main() -> int:
+    configure_logging()
+    try:
+        return run()
+    except Exception:
+        LOGGER.exception("Nomzy could not start")
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

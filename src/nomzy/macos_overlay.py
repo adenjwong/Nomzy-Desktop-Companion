@@ -1,13 +1,23 @@
+import logging
 import sys
 from ctypes import c_void_p
+
+from PySide6.QtGui import QGuiApplication
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def is_macos() -> bool:
     return sys.platform == "darwin"
 
 
+def has_native_macos_windowing() -> bool:
+    return is_macos() and QGuiApplication.platformName() == "cocoa"
+
+
 def configure_macos_application(hide_dock_icon: bool = True) -> None:
-    if not is_macos():
+    if not has_native_macos_windowing():
         return
 
     try:
@@ -21,12 +31,12 @@ def configure_macos_application(hide_dock_icon: bool = True) -> None:
             )
 
     except Exception as error:
-        print(f"[Nomzy macOS] Could not configure app policy: {error}")
+        LOGGER.warning("Could not configure macOS app policy: %s", error)
 
 
 # QWidget.winId() points to an NSView on macOS, so unwrap its parent NSWindow.
 def get_ns_window(qt_widget):
-    if not is_macos():
+    if not has_native_macos_windowing():
         return None
 
     try:
@@ -44,7 +54,7 @@ def get_ns_window(qt_widget):
         return native_object
 
     except Exception as error:
-        print(f"[Nomzy macOS] Could not get NSWindow: {error}")
+        LOGGER.warning("Could not get the macOS NSWindow: %s", error)
         return None
 
 
@@ -68,7 +78,7 @@ def configure_macos_overlay_window(
     window_level: str = "status",
     prevent_activation: bool = True,
 ) -> None:
-    if not is_macos():
+    if not has_native_macos_windowing():
         return
 
     try:
@@ -77,7 +87,7 @@ def configure_macos_overlay_window(
         ns_window = get_ns_window(qt_widget)
 
         if ns_window is None:
-            print("[Nomzy macOS] No NSWindow found.")
+            LOGGER.warning("No macOS NSWindow was found for the Nomzy overlay")
             return
 
         if hasattr(ns_window, "setOpaque_"):
@@ -148,4 +158,4 @@ def configure_macos_overlay_window(
             ns_window.orderFrontRegardless()
 
     except Exception as error:
-        print(f"[Nomzy macOS] Could not configure overlay window: {error}")
+        LOGGER.warning("Could not configure the macOS overlay window: %s", error)

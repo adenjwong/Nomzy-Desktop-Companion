@@ -1,5 +1,10 @@
+import logging
+
 from .paths import get_legacy_settings_path, get_settings_path
 from .storage import load_user_json, write_json_atomic
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 DEFAULT_SETTINGS = {
@@ -135,8 +140,8 @@ def load_settings() -> dict:
     if user_settings != settings:
         try:
             write_json_atomic(settings_path, settings)
-        except OSError:
-            pass
+        except OSError as error:
+            LOGGER.warning("Could not persist repaired settings: %s", error)
     return settings
 
 

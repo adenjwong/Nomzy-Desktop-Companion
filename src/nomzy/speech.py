@@ -1,7 +1,11 @@
 import json
+import logging
 import random
 
 from .paths import get_speech_path
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 DEFAULT_SPEECH = {
@@ -70,14 +74,22 @@ def load_speech() -> dict:
         for category, lines in DEFAULT_SPEECH.items()
     }
 
-    if not speech_path.exists():
-        return speech
-
     try:
+        if not speech_path.exists():
+            LOGGER.warning(
+                "Speech configuration %s is missing; using built-in speech",
+                speech_path,
+            )
+            return speech
+
         with open(speech_path, "r", encoding="utf-8") as file:
             user_speech = json.load(file)
 
         if not isinstance(user_speech, dict):
+            LOGGER.warning(
+                "Speech configuration %s is not an object; using defaults",
+                speech_path,
+            )
             return speech
 
         for category, lines in user_speech.items():
@@ -96,8 +108,12 @@ def load_speech() -> dict:
             if clean_lines:
                 speech[category] = clean_lines
 
-    except Exception:
-        pass
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        LOGGER.warning(
+            "Could not load speech configuration from %s; using defaults: %s",
+            speech_path,
+            error,
+        )
 
     return speech
 

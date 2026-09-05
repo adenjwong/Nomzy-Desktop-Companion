@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from nomzy import __version__
-from nomzy.main import main
+from nomzy.main import main, run
 from nomzy.macos_overlay import (
     configure_macos_application,
     has_native_macos_windowing,
@@ -19,7 +19,31 @@ from nomzy.storage import read_json_object
 
 class ProjectRuntimeTests(unittest.TestCase):
     def test_release_version(self):
-        self.assertEqual(__version__, "0.5.2")
+        self.assertEqual(__version__, "0.5.3")
+
+    def test_startup_configures_version_and_defers_overlay_to_show_event(self):
+        centered_position = object()
+
+        with (
+            patch("nomzy.main.QApplication") as application_class,
+            patch("nomzy.main.NomzyDog") as companion_class,
+            patch("nomzy.main.configure_macos_application") as configure_macos,
+        ):
+            application = application_class.return_value
+            application.exec.return_value = 0
+            companion = companion_class.return_value
+            companion.settings = {"macos_hide_dock_icon": True}
+            companion.get_saved_position.return_value = None
+            companion.get_centered_position.return_value = centered_position
+
+            self.assertEqual(run(["nomzy"]), 0)
+
+        application.setApplicationVersion.assert_called_once_with(__version__)
+        configure_macos.assert_called_once_with(hide_dock_icon=True)
+        companion.move.assert_called_once_with(centered_position)
+        companion.show.assert_called_once_with()
+        companion.apply_native_overlay_style.assert_not_called()
+        companion.enforce_always_on_top.assert_not_called()
 
     def test_checkout_resources_are_discoverable(self):
         self.assertTrue((get_assets_dir() / "nomzy_animations.json").is_file())

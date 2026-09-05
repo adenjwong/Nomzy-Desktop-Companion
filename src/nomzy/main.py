@@ -43,8 +43,6 @@ def run(argv: list[str] | None = None) -> int:
             nomzy.move(centered_position)
 
     nomzy.show()
-    nomzy.apply_native_overlay_style()
-    nomzy.enforce_always_on_top()
 
     return app.exec()
 

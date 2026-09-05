@@ -8,8 +8,6 @@ from .speech import choose_speech
 
 
 class CompanionBehaviorMixin:
-    """Autonomous movement, speech, and reaction behavior for Nomzy."""
-
     def perform_scheduled_action(self, action: BehaviorAction | None):
         if action is None:
             return

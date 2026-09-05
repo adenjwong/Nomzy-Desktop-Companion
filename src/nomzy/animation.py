@@ -43,8 +43,6 @@ class AnimationClip:
 
 
 class AnimationPlayer:
-    """Advances named animation clips using elapsed wall-clock time."""
-
     def __init__(self, clips: dict[str, AnimationClip], initial_clip: str):
         if initial_clip not in clips:
             raise KeyError(f"Unknown initial animation: {initial_clip}")

@@ -1,6 +1,6 @@
 import unittest
 
-from PySide6.QtCore import QPoint
+from PySide6.QtCore import QPoint, QRect
 
 from nomzy.activity import (
     CompanionActivityMixin,
@@ -30,11 +30,16 @@ class InteractionHarness(CompanionActivityMixin, CompanionInteractionMixin):
         self.activity = CompanionStateMachine(ACTIVITY_CLIPS)
         self.activity.menu_open = True
         self.activity.state = CompanionState.MENU
+        self.settings = {
+            "menu_arc_radius": 102,
+            "menu_button_radius": 24,
+        }
         self.scheduler = BehaviorScheduler({"walk_interval_seconds": 10})
         self.scheduler.start_walk()
         self.walk_step_x = 1
         self.walk_step_y = 1
         self.drag_direction_x = 100
+        self.drag_pointer_offset = QPoint()
         self.last_direction = 1
         self.animation_updates = 0
         self.paint_updates = 0
@@ -54,6 +59,9 @@ class InteractionHarness(CompanionActivityMixin, CompanionInteractionMixin):
 
     def update(self):
         self.paint_updates += 1
+
+    def get_drag_anchor_point(self):
+        return QPoint(50, 30)
 
 
 class DragInteractionTests(unittest.TestCase):
@@ -93,6 +101,23 @@ class DragInteractionTests(unittest.TestCase):
         self.assertEqual(harness.activity.state, CompanionState.IDLE)
         self.assertEqual(harness.animation_updates, 1)
         self.assertEqual(harness.visibility_checks, 1)
+
+    def test_drag_pointer_offset_prevents_a_jump_at_drag_start(self):
+        harness = InteractionHarness()
+        harness.drag_pointer_offset = QPoint(12, -4)
+
+        position = harness.get_drag_window_position(QPoint(500, 300))
+
+        self.assertEqual(position, QPoint(438, 274))
+
+    def test_radial_menu_buttons_fit_inside_the_menu_window(self):
+        harness = InteractionHarness()
+        menu_bounds = QRect(0, 0, 360, 300)
+        sprite_rect = QRect(125, 108, 110, 85)
+
+        for button in harness.get_menu_buttons(sprite_rect):
+            with self.subTest(action=button["action"]):
+                self.assertTrue(menu_bounds.contains(button["rect"]))
 
 
 if __name__ == "__main__":

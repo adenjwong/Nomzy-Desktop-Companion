@@ -21,12 +21,6 @@ class NomzyDog(
     CompanionRenderingMixin,
     QWidget,
 ):
-    """The Nomzy desktop companion widget.
-
-    Feature-specific behavior lives in focused mixins while this class owns the
-    companion's state, initialization, timers, and main update loop.
-    """
-
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Nomzy Desktop Companion")
@@ -58,6 +52,7 @@ class NomzyDog(
         self.setAutoFillBackground(False)
 
         self.mouse_press_global = QPoint()
+        self.drag_pointer_offset = QPoint()
         self.drag_direction_x = 0
         self.pending_menu_action = None
         self.close_menu_on_release = False

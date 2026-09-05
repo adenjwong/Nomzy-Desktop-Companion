@@ -17,8 +17,6 @@ class BehaviorAction(Enum):
 
 
 class BehaviorScheduler:
-    """Owns Nomzy's independent behavior countdowns and emits due actions."""
-
     def __init__(self, settings: dict, rng=None):
         self.settings = dict(settings)
         self.rng = rng if rng is not None else random

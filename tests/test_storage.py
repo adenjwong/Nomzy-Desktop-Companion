@@ -213,6 +213,36 @@ class PersistenceTests(unittest.TestCase):
             {},
         )
 
+    def test_state_preserves_valid_display_relative_position(self):
+        state = {
+            "sprite_center_x": -800,
+            "sprite_center_y": 400,
+            "last_direction": -1,
+            "screen_id": "serial:ABC123",
+            "screen_relative_x": 0.25,
+            "screen_relative_y": 0.75,
+        }
+
+        self.assertEqual(normalize_state(state), state)
+
+    def test_state_discards_incomplete_display_metadata(self):
+        state = {
+            "sprite_center_x": 100,
+            "sprite_center_y": 200,
+            "last_direction": 1,
+            "screen_id": "serial:ABC123",
+            "screen_relative_x": 2.0,
+        }
+
+        self.assertEqual(
+            normalize_state(state),
+            {
+                "sprite_center_x": 100,
+                "sprite_center_y": 200,
+                "last_direction": 1,
+            },
+        )
+
     def test_atomic_write_leaves_only_the_completed_file(self):
         write_json_atomic(self.user_state, {"last_direction": -1})
 

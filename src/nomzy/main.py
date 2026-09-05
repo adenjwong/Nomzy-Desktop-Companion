@@ -34,13 +34,9 @@ def main():
     if saved_position is not None:
         nomzy.move(saved_position)
     else:
-        screen = QApplication.primaryScreen()
-        bounds = screen.availableGeometry()
-
-        start_x = bounds.center().x()
-        start_y = bounds.center().y()
-
-        nomzy.move(start_x, start_y)
+        centered_position = nomzy.get_centered_position()
+        if centered_position is not None:
+            nomzy.move(centered_position)
 
     nomzy.show()
     nomzy.apply_native_overlay_style()

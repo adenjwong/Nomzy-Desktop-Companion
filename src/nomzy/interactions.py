@@ -12,8 +12,6 @@ DRAG_DIRECTION_THRESHOLD = 3
 
 
 class CompanionInteractionMixin:
-    """Radial menu actions, context menu, and mouse interaction."""
-
     def get_menu_buttons(self, sprite_rect):
         if not self.activity.menu_open:
             return []
@@ -156,6 +154,13 @@ class CompanionInteractionMixin:
         self.update_overlay_mask()
         self.update()
 
+    def get_drag_window_position(self, current_global):
+        return (
+            current_global
+            - self.drag_pointer_offset
+            - self.get_drag_anchor_point()
+        )
+
     def mousePressEvent(self, event):
         if event.button() != Qt.MouseButton.LeftButton:
             return
@@ -175,6 +180,8 @@ class CompanionInteractionMixin:
                 return
 
         self.mouse_press_global = event.globalPosition().toPoint()
+        drag_anchor_global = self.mapToGlobal(self.get_drag_anchor_point())
+        self.drag_pointer_offset = self.mouse_press_global - drag_anchor_global
         self.drag_direction_x = self.mouse_press_global.x()
         event.accept()
 
@@ -190,7 +197,7 @@ class CompanionInteractionMixin:
         if moved_distance > 4:
             self.begin_dragging()
             self.update_drag_direction(current_global)
-            self.move(current_global - self.get_drag_anchor_point())
+            self.move(self.get_drag_window_position(current_global))
         event.accept()
 
     def mouseReleaseEvent(self, event):

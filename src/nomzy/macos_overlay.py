@@ -7,10 +7,6 @@ def is_macos() -> bool:
 
 
 def configure_macos_application(hide_dock_icon: bool = True) -> None:
-    """
-    Makes the running Python/Qt app behave more like a background accessory app
-    on macOS instead of a normal foreground application.
-    """
     if not is_macos():
         return
 
@@ -28,13 +24,8 @@ def configure_macos_application(hide_dock_icon: bool = True) -> None:
         print(f"[Nomzy macOS] Could not configure app policy: {error}")
 
 
+# QWidget.winId() points to an NSView on macOS, so unwrap its parent NSWindow.
 def get_ns_window(qt_widget):
-    """
-    Gets the native macOS NSWindow behind a PySide6 QWidget.
-
-    On macOS, QWidget.winId() usually returns a pointer to an NSView.
-    That NSView has a .window() method that gives us the NSWindow.
-    """
     if not is_macos():
         return None
 
@@ -58,18 +49,6 @@ def get_ns_window(qt_widget):
 
 
 def get_window_level(level_name: str):
-    """
-    Converts a friendly setting name into a macOS window level.
-
-    floating:
-        Above normal app windows.
-
-    status:
-        Stronger overlay level. Usually better for desktop companions.
-
-    screen_saver:
-        Very aggressive. Use only if Nomzy still falls behind things.
-    """
     import AppKit
 
     normalized = str(level_name).strip().lower()
@@ -83,20 +62,12 @@ def get_window_level(level_name: str):
     return AppKit.NSFloatingWindowLevel + 1
 
 
+# Configure the native window because Qt flags do not cover macOS Spaces behavior.
 def configure_macos_overlay_window(
     qt_widget,
     window_level: str = "status",
     prevent_activation: bool = True,
 ) -> None:
-    """
-    Applies macOS-native overlay behavior to the Qt window.
-
-    Goal:
-    - stay above normal windows
-    - join all spaces/desktops
-    - avoid becoming the active application
-    - remain visible when other apps are active
-    """
     if not is_macos():
         return
 

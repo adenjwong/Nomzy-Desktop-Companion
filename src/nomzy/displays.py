@@ -37,6 +37,31 @@ def clamp_window_position(
     )
 
 
+def normalized_position(point: QPoint, bounds: QRect) -> tuple[float, float]:
+    horizontal_span = max(1, bounds.width() - 1)
+    vertical_span = max(1, bounds.height() - 1)
+    return (
+        max(0.0, min((point.x() - bounds.left()) / horizontal_span, 1.0)),
+        max(0.0, min((point.y() - bounds.top()) / vertical_span, 1.0)),
+    )
+
+
+def position_from_normalized(
+    relative_x: float,
+    relative_y: float,
+    bounds: QRect,
+) -> QPoint:
+    return QPoint(
+        bounds.left() + round(relative_x * max(1, bounds.width() - 1)),
+        bounds.top() + round(relative_y * max(1, bounds.height() - 1)),
+    )
+
+
+def remap_point(point: QPoint, old_bounds: QRect, new_bounds: QRect) -> QPoint:
+    relative_x, relative_y = normalized_position(point, old_bounds)
+    return position_from_normalized(relative_x, relative_y, new_bounds)
+
+
 def _distance_squared(point: QPoint, geometry: QRect) -> int:
     if point.x() < geometry.left():
         distance_x = geometry.left() - point.x()

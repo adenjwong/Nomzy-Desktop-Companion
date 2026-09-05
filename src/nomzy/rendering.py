@@ -11,8 +11,6 @@ from PySide6.QtGui import (
 
 
 class CompanionRenderingMixin:
-    """Sprite selection, layout geometry, input masking, and painting."""
-
     def update_overlay_mask(self):
         if not self.settings.get("overlay_mode_enabled", True):
             self.clearMask()

@@ -45,8 +45,6 @@ class StateTransition:
 
 
 class CompanionStateMachine:
-    """Owns Nomzy's activity and the rules for interrupting activities."""
-
     def __init__(self, animation_names: dict[CompanionState, str]):
         required_states = set(CompanionState) - {CompanionState.REACTING}
         missing_states = required_states - animation_names.keys()

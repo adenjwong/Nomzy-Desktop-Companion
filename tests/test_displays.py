@@ -2,7 +2,13 @@ import unittest
 
 from PySide6.QtCore import QPoint, QRect, QSize
 
-from nomzy.displays import clamp_window_position, screen_index_for_point
+from nomzy.displays import (
+    clamp_window_position,
+    normalized_position,
+    position_from_normalized,
+    remap_point,
+    screen_index_for_point,
+)
 
 
 class DisplayGeometryTests(unittest.TestCase):
@@ -11,6 +17,8 @@ class DisplayGeometryTests(unittest.TestCase):
             QRect(-1920, 0, 1920, 1080),
             QRect(0, 0, 2560, 1440),
             QRect(0, -900, 1600, 900),
+            QRect(2560, 0, 1512, 982),
+            QRect(0, 1440, 1920, 1080),
         ]
 
     def test_screen_is_selected_from_negative_coordinates(self):
@@ -24,6 +32,26 @@ class DisplayGeometryTests(unittest.TestCase):
             screen_index_for_point(self.geometries, QPoint(500, -400)),
             2,
         )
+
+    def test_screens_are_selected_right_and_below_the_primary_display(self):
+        self.assertEqual(
+            screen_index_for_point(self.geometries, QPoint(3000, 500)),
+            3,
+        )
+        self.assertEqual(
+            screen_index_for_point(self.geometries, QPoint(500, 1800)),
+            4,
+        )
+
+    def test_scaled_display_geometry_uses_qt_logical_coordinates(self):
+        scaled_display = self.geometries[3]
+        position = clamp_window_position(
+            QPoint(4000, 900),
+            QSize(360, 190),
+            scaled_display,
+        )
+
+        self.assertEqual(position, QPoint(3712, 792))
 
     def test_nearest_screen_is_selected_for_a_disconnected_position(self):
         remaining_geometries = self.geometries[:2]
@@ -56,6 +84,20 @@ class DisplayGeometryTests(unittest.TestCase):
 
     def test_no_screen_is_selected_when_none_are_available(self):
         self.assertIsNone(screen_index_for_point([], QPoint()))
+
+    def test_relative_position_survives_coordinate_and_scale_changes(self):
+        old_geometry = QRect(-1920, 0, 1920, 1080)
+        new_geometry = QRect(1512, -982, 2560, 1440)
+        old_point = QPoint(-960, 540)
+
+        remapped = remap_point(old_point, old_geometry, new_geometry)
+        relative = normalized_position(old_point, old_geometry)
+
+        self.assertEqual(
+            remapped,
+            position_from_normalized(*relative, new_geometry),
+        )
+        self.assertTrue(new_geometry.contains(remapped))
 
 
 if __name__ == "__main__":

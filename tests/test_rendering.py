@@ -11,6 +11,25 @@ class RenderingHarness(CompanionRenderingMixin):
         self.message = "hello"
 
 
+class FakePixmap:
+    def width(self):
+        return 110
+
+    def height(self):
+        return 85
+
+
+class SpeechWindowHarness(RenderingHarness):
+    sprite_anchor_x = 0.5
+    sprite_anchor_y = 1.0
+
+    def width(self):
+        return 360
+
+    def height(self):
+        return 190
+
+
 class SpeechBubbleGeometryTests(unittest.TestCase):
     def test_bubble_and_tail_form_one_continuous_shape(self):
         sprite_rect = QRect(140, 80, 110, 85)
@@ -51,6 +70,28 @@ class SpeechBubbleGeometryTests(unittest.TestCase):
                 self.assertGreaterEqual(sprite_rect.left() - tail_tip.x(), 10)
             else:
                 self.assertGreaterEqual(tail_tip.x() - sprite_rect.right(), 10)
+
+    def test_bubble_and_tail_fit_inside_the_speech_window(self):
+        window_bounds = QRect(0, 0, 360, 190)
+
+        for direction in (-1, 1):
+            harness = SpeechWindowHarness(direction)
+            sprite_rect = harness.get_sprite_rect(
+                FakePixmap(),
+                force_message=True,
+                force_menu=False,
+            )
+            bubble_rect, bubble_path = harness.get_speech_bubble_geometry(
+                sprite_rect
+            )
+
+            with self.subTest(direction=direction):
+                self.assertTrue(window_bounds.contains(bubble_rect))
+                self.assertTrue(
+                    window_bounds.contains(
+                        bubble_path.boundingRect().toAlignedRect()
+                    )
+                )
 
 
 if __name__ == "__main__":

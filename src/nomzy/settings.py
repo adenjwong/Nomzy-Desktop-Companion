@@ -51,7 +51,7 @@ DEFAULT_SETTINGS = {
     "speech_min_duration_ticks": 75,
     "speech_max_duration_ticks": 125,
 
-    "speech_bubble_opacity": 145,
+    "speech_bubble_opacity": 153,
 }
 
 INTEGER_LIMITS = {
@@ -76,7 +76,7 @@ INTEGER_LIMITS = {
     "speech_max_ticks": (25, 180000),
     "speech_min_duration_ticks": (25, 750),
     "speech_max_duration_ticks": (25, 750),
-    "speech_bubble_opacity": (0, 255),
+    "speech_bubble_opacity": (26, 255),
 }
 
 ORDERED_SETTING_PAIRS = (

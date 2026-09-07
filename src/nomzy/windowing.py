@@ -1,9 +1,10 @@
 from functools import partial
 
-from PySide6.QtCore import QPoint, QRect, QTimer
+from PySide6.QtCore import QPoint, QRect, QTimer, Qt
 from PySide6.QtWidgets import QApplication
 
-from .activity import CompanionState
+from .activity import CompanionEvent, CompanionState
+from .settings import normalize_settings
 from .displays import (
     clamp_window_position,
     normalized_position,
@@ -246,7 +247,8 @@ class CompanionWindowMixin:
 
         configure_macos_overlay_window(
             self,
-            window_level=str(self.settings.get("macos_window_level", "status")),
+            window_level=(str(self.settings.get("macos_window_level", "status"))
+                          if self.settings.get("always_on_top", True) else "normal"),
             prevent_activation=bool(self.settings.get("prevent_focus_steal", True)),
         )
 
@@ -371,11 +373,19 @@ class CompanionWindowMixin:
         old_scaled_sprite = self.get_scaled_sprite()
         old_sprite_rect = self.get_sprite_rect(old_scaled_sprite)
         old_sprite_center_global = self.mapToGlobal(old_sprite_rect.center())
-        self.settings = dict(updated_settings)
+        previous_settings = self.settings
+        self.settings = normalize_settings(updated_settings)
         self.scheduler.update_settings(self.settings)
         self.recalculate_window_dimensions()
-        if self.activity.state is CompanionState.IDLE:
-            self.scheduler.reset_walk()
+        if not self.settings["movement_enabled"] and self.activity.state is CompanionState.WALKING:
+            self.transition_activity(CompanionEvent.STOP_WALKING)
+            self.update_animation(0)
+        if previous_settings.get("always_on_top", True) != self.settings["always_on_top"]:
+            was_visible = self.isVisible()
+            self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, self.settings["always_on_top"])
+            if was_visible:
+                self.show()
+            self.apply_native_overlay_style()
 
         if self.activity.menu_open:
             desired_width, desired_height = (

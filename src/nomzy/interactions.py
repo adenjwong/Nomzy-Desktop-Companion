@@ -111,7 +111,7 @@ class CompanionInteractionMixin:
                 settings=self.settings,
                 on_save=self.apply_updated_settings,
             )
-        else:
+        elif not self.settings_window.isVisible():
             self.settings_window.load_values(self.settings)
         self.settings_window.show()
         self.settings_window.raise_()

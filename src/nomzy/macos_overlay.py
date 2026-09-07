@@ -63,6 +63,9 @@ def get_window_level(level_name: str):
 
     normalized = str(level_name).strip().lower()
 
+    if normalized == "normal":
+        return AppKit.NSNormalWindowLevel
+
     if normalized == "screen_saver":
         return AppKit.NSScreenSaverWindowLevel
 
@@ -154,7 +157,7 @@ def configure_macos_overlay_window(
         if hasattr(ns_window, "setIgnoresMouseEvents_"):
             ns_window.setIgnoresMouseEvents_(False)
 
-        if hasattr(ns_window, "orderFrontRegardless"):
+        if window_level != "normal" and hasattr(ns_window, "orderFrontRegardless"):
             ns_window.orderFrontRegardless()
 
     except Exception as error:

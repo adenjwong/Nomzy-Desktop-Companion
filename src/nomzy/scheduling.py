@@ -43,12 +43,22 @@ class BehaviorScheduler:
         )
 
     def update_settings(self, settings: dict) -> None:
+        previous = self.settings
         self.settings = dict(settings)
-        speech_max = int(self.settings.get("speech_max_ticks", 4500))
-        self.speech_cooldown_ticks = min(
-            self.speech_cooldown_ticks,
-            speech_max,
-        )
+        if previous.get("walk_interval_seconds") != settings.get("walk_interval_seconds"):
+            # Keep an ongoing walk intact while rescheduling the next one.
+            remaining = self.walk_ticks_remaining
+            self.reset_walk()
+            self.walk_ticks_remaining = remaining
+        for minimum, maximum, attribute in (
+            ("speech_min_ticks", "speech_max_ticks", "speech_cooldown_ticks"),
+            ("blink_min_interval_ms", "blink_max_interval_ms", "blink_cooldown_ms"),
+            ("rest_min_interval_ms", "rest_max_interval_ms", "rest_cooldown_ms"),
+        ):
+            if any(previous.get(key) != settings.get(key) for key in (minimum, maximum)):
+                # Clamp only the affected countdown into its newly selected range.
+                setattr(self, attribute, max(settings[minimum], min(
+                    getattr(self, attribute), settings[maximum])))
 
     def next_movement_action(
         self,

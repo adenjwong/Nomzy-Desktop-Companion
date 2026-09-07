@@ -149,6 +149,29 @@ class BehaviorSchedulerTests(unittest.TestCase):
 
         self.assertIn(call(45000, 120000), self.rng.randint.call_args_list)
 
+    def test_unrelated_settings_preserve_all_countdowns(self):
+        attributes = ("walk_cooldown_ticks", "walk_ticks_remaining",
+                      "speech_cooldown_ticks", "message_ticks_remaining",
+                      "blink_cooldown_ms", "rest_cooldown_ms")
+        for attribute in attributes:
+            setattr(self.scheduler, attribute, 7)
+        self.scheduler.update_settings(SETTINGS | {"user_name": "Alex"})
+        self.assertEqual([getattr(self.scheduler, key) for key in attributes], [7] * 6)
+
+    def test_interval_changes_affect_only_corresponding_countdowns(self):
+        self.scheduler.walk_ticks_remaining = 9
+        self.scheduler.speech_cooldown_ticks = 123
+        self.scheduler.update_settings(SETTINGS | {"walk_interval_seconds": 60})
+        self.assertEqual(self.scheduler.walk_ticks_remaining, 9)
+        self.assertEqual(self.scheduler.walk_cooldown_ticks, 1125)
+        self.assertEqual(self.scheduler.speech_cooldown_ticks, 123)
+        self.scheduler.update_settings(self.scheduler.settings | {
+            "rest_min_interval_ms": 1000, "rest_max_interval_ms": 2000,
+            "blink_min_interval_ms": 20000, "blink_max_interval_ms": 30000,
+        })
+        self.assertEqual(self.scheduler.rest_cooldown_ms, 2000)
+        self.assertEqual(self.scheduler.blink_cooldown_ms, 20000)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -113,9 +113,7 @@ class CompanionInteractionMixin:
             )
         elif not self.settings_window.isVisible():
             self.settings_window.load_values(self.settings)
-        self.settings_window.show()
-        self.settings_window.raise_()
-        self.settings_window.activateWindow()
+        self.settings_window.present(self.get_current_screen())
 
     def begin_dragging(self):
         if self.activity.is_dragging:

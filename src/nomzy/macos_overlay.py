@@ -162,3 +162,18 @@ def configure_macos_overlay_window(
 
     except Exception as error:
         LOGGER.warning("Could not configure the macOS overlay window: %s", error)
+
+
+def activate_settings_window(widget):
+    """Explicit user action may activate the accessory app for keyboard input."""
+    if not has_native_macos_windowing():
+        return
+    try:
+        import AppKit
+
+        AppKit.NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
+        window = get_ns_window(widget)
+        if window is not None:
+            window.makeKeyAndOrderFront_(None)
+    except Exception as error:
+        LOGGER.warning("Could not activate settings window: %s", error)

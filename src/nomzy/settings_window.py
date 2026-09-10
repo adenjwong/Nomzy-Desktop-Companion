@@ -1,7 +1,8 @@
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QSlider, QTabWidget, QVBoxLayout, QWidget,
+    QLabel, QLineEdit, QPushButton, QScrollArea, QSlider, QTabWidget, QVBoxLayout, QWidget,
 )
 
 from .settings import DEFAULT_SETTINGS, INTEGER_LIMITS, normalize_settings, save_settings
@@ -20,19 +21,21 @@ class NomzySettingsWindow(QWidget):
         self.controls = {}
         self.numeric_scales = {}
         self.setWindowTitle("Nomzy Settings")
-        self.setMinimumWidth(520)
+        self.resize(560, 520)
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
         self.tabs = QTabWidget()
         general = self.section("General")
         self.name_input = QLineEdit()
         self.name_input.setMaxLength(80)
         self.name_input.setPlaceholderText("friend")
-        general.addRow("Your name", self.name_input)
+        general.addRow("&Your name", self.name_input)
+        self.name_input.setAccessibleName("Your name")
         self.size_slider = QSlider(Qt.Orientation.Horizontal)
         self.size_slider.setRange(60, 180)
         self.size_label = QLabel()
         self.size_slider.valueChanged.connect(self.update_size_label)
-        general.addRow("Nomzy size", self.size_slider)
+        general.addRow("Nomzy &size", self.size_slider)
+        self.size_slider.setAccessibleName("Nomzy size")
         general.addRow("", self.size_label)
         self.checkbox(general, "Always on top", "always_on_top")
         self.checkbox(general, "Remember position", "save_position")
@@ -47,7 +50,7 @@ class NomzySettingsWindow(QWidget):
 
         idle = self.section("Idle behavior")
         self.range_rows(idle, "Rest interval", "rest_min_interval_ms", "rest_max_interval_ms", 1000, " seconds")
-        self.number(idle, "Chance of sleeping instead of sitting", "sleep_chance_percent", 1, " %")
+        self.number(idle, "Sleep chance", "sleep_chance_percent", 1, " %")
         self.range_rows(idle, "Blink interval", "blink_min_interval_ms", "blink_max_interval_ms", 1000, " seconds")
 
         speech = self.section("Speech")
@@ -60,6 +63,9 @@ class NomzySettingsWindow(QWidget):
         opacity.setRange(10, 100)
         self.controls["speech_enabled"].toggled.connect(self.update_enabled)
 
+        self.movement_amount_input.setToolTip("Controls how long each walk lasts. Custom keeps your existing movement range.")
+        self.controls["speech_enabled"].setToolTip("Let Nomzy speak on its own. You can still use Talk when this is off.")
+        self.controls["sleep_chance_percent"].setToolTip("Chance that each rest becomes sleep instead of sitting.")
         self.status_label = QLabel()
         self.status_label.setWordWrap(True)
         self.apply_button = QPushButton("Apply")
@@ -74,27 +80,68 @@ class NomzySettingsWindow(QWidget):
         buttons.addWidget(self.cancel_button)
         buttons.addWidget(self.apply_button)
         layout = QVBoxLayout(self)
+        instructions = QLabel("Apply saves changes immediately. Cancel or closing discards unapplied edits.")
+        instructions.setWordWrap(True)
+        layout.addWidget(instructions)
         layout.addWidget(self.tabs)
         layout.addWidget(self.status_label)
         layout.addLayout(buttons)
+        self.save_shortcut = QShortcut(QKeySequence.StandardKey.Save, self)
+        self.save_shortcut.activated.connect(self.apply_draft)
         self.load_values(settings)
+
+    def present(self, screen=None):
+        """Recover minimized/off-screen windows without replacing an open draft."""
+        focus = self.focusWidget()
+        self.showNormal()
+        screen = screen or self.screen()
+        if screen is not None:
+            bounds = screen.availableGeometry().adjusted(8, 8, -8, -8)
+            frame = self.frameGeometry()
+            self.resize(min(self.width(), bounds.width() - frame.width() + self.width()),
+                        min(self.height(), bounds.height() - frame.height() + self.height()))
+            frame = self.frameGeometry()
+            self.move(max(bounds.left(), min(frame.x(), bounds.right() - frame.width() + 1)),
+                      max(bounds.top(), min(frame.y(), bounds.bottom() - frame.height() + 1)))
+        self.raise_()
+        self.activateWindow()
+        from .macos_overlay import activate_settings_window
+        activate_settings_window(self)
+        if focus is None or not focus.isVisible() or not focus.isEnabled():
+            page = self.tabs.currentWidget().widget()
+            focus = next((child for child in page.findChildren(QWidget)
+                          if child.isVisible() and child.isEnabled()
+                          and child.focusPolicy() & Qt.FocusPolicy.TabFocus), self.tabs)
+            focus.setFocus(Qt.FocusReason.OtherFocusReason)
+        else:
+            focus.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def section(self, title):
         page = QWidget()
         form = QFormLayout(page)
         form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
-        self.tabs.addTab(page, title)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        form.setVerticalSpacing(12)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setWidget(page)
+        self.tabs.addTab(scroll, title)
         return form
 
     def checkbox(self, form, label, key):
         control = QCheckBox(label)
+        control.setAccessibleName(label)
         self.controls[key] = control
         form.addRow(control)
         return control
 
     def number(self, form, label, key, scale, suffix):
         control = QDoubleSpinBox()
-        control.setDecimals(3 if scale == 1000 else 2)
+        control.setAccessibleName(label)
+        control.setKeyboardTracking(False)
+        control.setDecimals(3 if scale == 1000 else (0 if scale == 1 else 2))
+        control.setSingleStep(1 if scale != TICKS_PER_SECOND else 1 / scale)
         low, high = INTEGER_LIMITS[key]
         control.setRange(low / scale, high / scale)
         control.setSuffix(suffix)
@@ -143,6 +190,9 @@ class NomzySettingsWindow(QWidget):
         self.size_label.setText(f"{round(self.size_slider.value() / 110 * 100)}% of standard size")
 
     def build_updated_settings(self):
+        # Commit text still being edited when Apply is invoked by a shortcut.
+        for key in self.numeric_scales:
+            self.controls[key].interpretText()
         updated = dict(self.settings)
         updated["user_name"] = self.name_input.text()
         updated["sprite_width"] = self.size_slider.value()

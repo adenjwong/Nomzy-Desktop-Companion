@@ -4,6 +4,8 @@ from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import QRect, Qt
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 from nomzy.settings import DEFAULT_SETTINGS
@@ -14,6 +16,49 @@ class SettingsWindowTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
+
+    def test_small_display_keeps_actions_visible_and_pages_scrollable(self):
+        window = NomzySettingsWindow(DEFAULT_SETTINGS, None)
+        self.addCleanup(window.close)
+        screen = Mock()
+        screen.availableGeometry.return_value = QRect(0, 0, 640, 360)
+        window.present(screen)
+        self.app.processEvents()
+        self.assertTrue(screen.availableGeometry().contains(window.frameGeometry()))
+        for index in range(window.tabs.count()):
+            window.tabs.setCurrentIndex(index)
+            self.app.processEvents()
+            scroll = window.tabs.currentWidget()
+            self.assertEqual(scroll.horizontalScrollBar().maximum(), 0)
+            self.assertTrue(window.rect().contains(window.apply_button.geometry()))
+        self.assertGreater(window.tabs.currentWidget().verticalScrollBar().maximum(), 0)
+
+    def test_present_restores_minimized_draft_and_focus(self):
+        window = NomzySettingsWindow(DEFAULT_SETTINGS, None)
+        self.addCleanup(window.close)
+        window.present()
+        window.name_input.setText("Alex")
+        window.size_slider.setFocus()
+        window.showMinimized()
+        window.present()
+        self.app.processEvents()
+        self.assertFalse(window.isMinimized())
+        self.assertEqual(window.name_input.text(), "Alex")
+        self.assertEqual(window.focusWidget(), window.size_slider)
+
+    def test_tab_navigation_and_pending_numeric_text_apply(self):
+        window = NomzySettingsWindow(DEFAULT_SETTINGS, None)
+        self.addCleanup(window.close)
+        window.present()
+        window.name_input.setFocus()
+        QTest.keyClick(window.name_input, Qt.Key.Key_Tab)
+        self.assertEqual(window.focusWidget(), window.size_slider)
+        window.tabs.setCurrentIndex(1)
+        window.walk_interval_input.lineEdit().setText("90 seconds")
+        with patch("nomzy.settings_window.save_settings") as save:
+            window.apply_draft()
+        self.assertEqual(save.call_args.args[0]["walk_interval_seconds"], 90)
+        self.assertEqual(window.walk_interval_input.decimals(), 0)
 
     def test_walk_interval_loads_from_settings(self):
         settings = DEFAULT_SETTINGS | {"walk_interval_seconds": 45}

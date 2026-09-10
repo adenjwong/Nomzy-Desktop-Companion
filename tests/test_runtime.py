@@ -19,7 +19,7 @@ from nomzy.storage import read_json_object
 
 class ProjectRuntimeTests(unittest.TestCase):
     def test_release_version(self):
-        self.assertEqual(__version__, "0.6.0")
+        self.assertEqual(__version__, "0.6.1")
 
     def test_startup_configures_version_and_defers_overlay_to_show_event(self):
         centered_position = object()

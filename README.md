@@ -35,7 +35,7 @@ packager places the `assets` and `config` directories under a custom resource
 root; ordinary repository, wheel, frozen-app, and macOS application-bundle
 layouts are detected automatically.
 
-## Settings (0.6.0)
+## Settings (0.6.1)
 
 Open **Settings** from Nomzy's menu or right-click menu:
 
@@ -56,6 +56,9 @@ interval adjusts the other end when needed to keep the range valid.
 **Cancel**, Escape, or closing the window discards edits since the last Apply.
 **Restore Defaults** prepares defaults for the visible controls; choose Apply to
 save them or Cancel to discard them. Internal overlay settings are preserved.
+The window scrolls on small displays. Use Tab and Shift+Tab to move between
+controls, Ctrl+Tab to switch tabs, and Command+S (Ctrl+S elsewhere) to Apply.
+Reopening settings restores the window and preserves an open draft.
 Changes to intervals update only their corresponding countdowns; other behavior
 and animation timers continue running.
 

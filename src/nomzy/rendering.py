@@ -2,6 +2,7 @@ from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, QSize, Qt
 from PySide6.QtGui import (
     QColor,
     QFont,
+    QFontMetrics,
     QPainter,
     QPainterPath,
     QPen,
@@ -9,8 +10,20 @@ from PySide6.QtGui import (
     QRegion,
 )
 
+from PySide6.QtWidgets import QApplication
+
 
 class CompanionRenderingMixin:
+    def interface_font(self):
+        return QFont(self.font() if hasattr(self, "font") else QApplication.font())
+
+    def speech_text_size(self):
+        metrics = QFontMetrics(self.interface_font())
+        width = max(145, metrics.horizontalAdvance("tiny dog thoughts...") + 24)
+        bounds = metrics.boundingRect(QRect(0, 0, width - 24, 10000),
+                                      Qt.TextFlag.TextWrapAnywhere, self.message or " ")
+        return QSize(width, max(46, bounds.height() + 24))
+
     def update_overlay_mask(self):
         if not self.settings.get("overlay_mode_enabled", True):
             self.clearMask()
@@ -114,10 +127,11 @@ class CompanionRenderingMixin:
             return None, None
 
         mouth = self.get_mouth_point(sprite_rect)
-        bubble_width = 145
-        bubble_height = 46
+        text_size = self.speech_text_size()
+        bubble_width = text_size.width()
+        bubble_height = text_size.height()
         bubble_gap = 28
-        bubble_vertical_offset = 64
+        bubble_vertical_offset = bubble_height + 18
 
         if self.last_direction >= 0:
             bubble_rect = QRect(
@@ -217,10 +231,10 @@ class CompanionRenderingMixin:
         painter.setPen(outline)
         painter.setBrush(bubble_fill)
         painter.drawPath(bubble_path)
-        painter.setPen(QColor(45, 45, 45, 225))
-        painter.setFont(QFont("Arial", 9))
-        text_rect = bubble_rect.adjusted(8, 4, -8, -4)
-        painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, self.message)
+        painter.setPen(QColor("#2d2d2d"))
+        painter.setFont(self.interface_font())
+        text_rect = bubble_rect.adjusted(8, 8, -8, -8)
+        painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWrapAnywhere, self.message)
         painter.restore()
 
     def draw_menu(self, painter, sprite_rect):
@@ -231,17 +245,17 @@ class CompanionRenderingMixin:
 
         for button in self.get_menu_buttons(sprite_rect):
             if button["group"] == "top":
-                fill = QColor(245, 238, 255, 220)
+                fill = QColor("#f5eeff")
                 outline = QColor(155, 130, 190, 210)
             else:
-                fill = QColor(255, 246, 230, 220)
+                fill = QColor("#fff6e6")
                 outline = QColor(205, 150, 90, 210)
 
             painter.setPen(QPen(outline, 2))
             painter.setBrush(fill)
             painter.drawEllipse(button["rect"])
-            painter.setPen(QColor(45, 45, 45, 235))
-            painter.setFont(QFont("Arial", 8, QFont.Weight.Bold))
+            painter.setPen(QColor("#2d2d2d"))
+            painter.setFont(self.interface_font())
             painter.drawText(
                 button["rect"],
                 Qt.AlignmentFlag.AlignCenter,

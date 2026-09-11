@@ -35,7 +35,7 @@ packager places the `assets` and `config` directories under a custom resource
 root; ordinary repository, wheel, frozen-app, and macOS application-bundle
 layouts are detected automatically.
 
-## Settings (0.6.1)
+## Settings
 
 Open **Settings** from Nomzy's menu or right-click menu:
 
@@ -64,3 +64,17 @@ and animation timers continue running.
 
 Launch at login is not yet implemented. Native macOS overlay levels and other
 internal window settings are intentionally kept out of the ordinary interface.
+
+
+## Visual consistency (0.6.2)
+
+Speech bubbles and menu labels use the system font. Menu circles and spacing
+fit their labels independently of Nomzy's size, and speech bubbles grow and
+wrap longer messages. Menu fills are opaque for consistent text contrast;
+speech keeps its adjustable transparency with no separate box behind the words.
+For clearer speech over dark or busy wallpaper, increase bubble opacity.
+
+The radial menu retains its original mouse interaction and nonactivating window
+behavior. This release adds no accessibility controls, keyboard navigation
+settings, or automatic focus highlights. Settings retains its existing native
+controls and shortcuts.

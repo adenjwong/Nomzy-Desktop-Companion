@@ -1,5 +1,7 @@
 import unittest
 
+from PySide6.QtWidgets import QApplication
+
 from PySide6.QtCore import QPoint, QRect
 
 from nomzy.activity import (
@@ -65,6 +67,10 @@ class InteractionHarness(CompanionActivityMixin, CompanionInteractionMixin):
 
 
 class DragInteractionTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
     def test_dragging_left_turns_nomzy_left(self):
         harness = InteractionHarness()
 
@@ -112,8 +118,10 @@ class DragInteractionTests(unittest.TestCase):
 
     def test_radial_menu_buttons_fit_inside_the_menu_window(self):
         harness = InteractionHarness()
-        menu_bounds = QRect(0, 0, 360, 300)
-        sprite_rect = QRect(125, 108, 110, 85)
+        radius, button_radius = harness.menu_metrics()
+        extent = 2 * (radius + button_radius + 8)
+        menu_bounds = QRect(0, 0, extent, extent)
+        sprite_rect = QRect(extent // 2 - 55, extent // 2 - 42, 110, 85)
 
         for button in harness.get_menu_buttons(sprite_rect):
             with self.subTest(action=button["action"]):

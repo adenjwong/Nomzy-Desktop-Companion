@@ -1,7 +1,7 @@
 import math
 
 from PySide6.QtCore import QRect, Qt
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QFontMetrics
 from PySide6.QtWidgets import QApplication, QMenu
 
 from .activity import CompanionEvent
@@ -12,13 +12,22 @@ DRAG_DIRECTION_THRESHOLD = 3
 
 
 class CompanionInteractionMixin:
+    def menu_metrics(self):
+        metrics = QFontMetrics(self.font() if hasattr(self, "font") else QApplication.font())
+        button_radius = max(int(self.settings["menu_button_radius"]),
+                            math.ceil(math.hypot(metrics.horizontalAdvance("Settings") + 20,
+                                                 metrics.height() + 12) / 2))
+        radius = max(int(self.settings.get("menu_arc_radius", 102)),
+                     math.ceil((button_radius + 6) / math.sin(math.radians(20))),
+                     int(self.settings.get("sprite_width", 110)) // 2 + button_radius + 12)
+        return radius, button_radius
+
     def get_menu_buttons(self, sprite_rect):
         if not self.activity.menu_open:
             return []
 
         center = sprite_rect.center()
-        radius = int(self.settings.get("menu_arc_radius", 102))
-        button_radius = int(self.settings["menu_button_radius"])
+        radius, button_radius = self.menu_metrics()
         pause_label = "Resume" if self.activity.paused else "Pause"
         items = [
             ("settings", "Settings", 210),

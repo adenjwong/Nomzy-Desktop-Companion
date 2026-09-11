@@ -1,5 +1,7 @@
 import unittest
 
+from PySide6.QtWidgets import QApplication
+
 from PySide6.QtCore import QRect
 
 from nomzy.rendering import CompanionRenderingMixin
@@ -31,6 +33,10 @@ class SpeechWindowHarness(RenderingHarness):
 
 
 class SpeechBubbleGeometryTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
     def test_bubble_and_tail_form_one_continuous_shape(self):
         sprite_rect = QRect(140, 80, 110, 85)
 

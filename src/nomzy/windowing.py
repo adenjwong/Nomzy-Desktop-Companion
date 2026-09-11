@@ -24,6 +24,18 @@ class CompanionWindowMixin:
         self.speech_window_height = int(self.settings["window_height"])
         self.menu_window_width = int(self.settings["menu_window_width"])
         self.menu_window_height = int(self.settings["menu_window_height"])
+        self.refresh_text_dimensions()
+
+    def refresh_text_dimensions(self):
+        radius, button_radius = self.menu_metrics()
+        extent = 2 * (radius + button_radius + 8)
+        self.menu_window_width = max(int(self.settings["menu_window_width"]), extent)
+        self.menu_window_height = max(int(self.settings["menu_window_height"]), extent)
+        if getattr(self, "message", ""):
+            text_size = self.speech_text_size()
+            sprite = self.get_scaled_sprite()
+            self.speech_window_width = max(int(self.settings["window_width"]), sprite.width() + text_size.width() + 64)
+            self.speech_window_height = max(int(self.settings["window_height"]), sprite.height() + text_size.height() + 40)
 
     def initialize_screen_tracking(self):
         self._tracked_screens = []
@@ -319,6 +331,15 @@ class CompanionWindowMixin:
             self.raise_()
 
     def update_window_size_for_state(self):
+        current_menu_layout = (
+            self.width() == self.menu_window_width
+            and self.height() == self.menu_window_height
+        )
+        current_speech_layout = (
+            self.width() == self.speech_window_width
+            and self.height() == self.speech_window_height
+        )
+        self.refresh_text_dimensions()
         if self.activity.menu_open:
             desired_width = self.menu_window_width
             desired_height = self.menu_window_height
@@ -335,14 +356,6 @@ class CompanionWindowMixin:
         if self.width() == desired_width and self.height() == desired_height:
             return
 
-        current_menu_layout = (
-            self.width() == self.menu_window_width
-            and self.height() == self.menu_window_height
-        )
-        current_speech_layout = (
-            self.width() == self.speech_window_width
-            and self.height() == self.speech_window_height
-        )
         scaled_sprite = self.get_scaled_sprite()
         old_sprite_rect = self.get_sprite_rect(
             scaled_sprite,

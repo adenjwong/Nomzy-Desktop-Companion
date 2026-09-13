@@ -40,6 +40,17 @@ class NomzySettingsWindow(QWidget):
         self.checkbox(general, "Always on top", "always_on_top")
         self.checkbox(general, "Remember position", "save_position")
 
+        from .login_item import LoginItem
+        self.login_item = LoginItem()
+        self.login_checkbox = QCheckBox("Launch at Login")
+        self.login_checkbox.setEnabled(self.login_item.service is not None)
+        self.login_status = QLabel()
+        self.login_status.setWordWrap(True)
+        general.addRow(self.login_checkbox)
+        general.addRow(self.login_status)
+        self.login_checkbox.clicked.connect(self.change_login_item)
+        self.refresh_login_item()
+
         movement = self.section("Movement")
         self.checkbox(movement, "Enable movement", "movement_enabled")
         self.walk_interval_input = self.number(movement, "Walk about every", "walk_interval_seconds", 1, " seconds")
@@ -92,6 +103,7 @@ class NomzySettingsWindow(QWidget):
 
     def present(self, screen=None):
         """Recover minimized/off-screen windows without replacing an open draft."""
+        self.refresh_login_item()
         focus = self.focusWidget()
         self.showNormal()
         screen = screen or self.screen()
@@ -115,6 +127,20 @@ class NomzySettingsWindow(QWidget):
             focus.setFocus(Qt.FocusReason.OtherFocusReason)
         else:
             focus.setFocus(Qt.FocusReason.OtherFocusReason)
+
+    def refresh_login_item(self):
+        enabled, message = self.login_item.status()
+        self.login_checkbox.setChecked(enabled)
+        self.login_status.setText(message + " Changes take effect immediately.")
+
+    def change_login_item(self, enabled):
+        try:
+            self.login_item.set_enabled(enabled)
+        except Exception as error:
+            self.refresh_login_item()
+            self.login_status.setText(str(error))
+        else:
+            self.refresh_login_item()
 
     def section(self, title):
         page = QWidget()

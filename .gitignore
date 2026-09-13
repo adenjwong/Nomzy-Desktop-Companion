@@ -219,3 +219,7 @@ __marimo__/
 
 # Nomzy state
 config/state.json
+!Nomzy.spec
+
+# Internal documentation
+/docs/

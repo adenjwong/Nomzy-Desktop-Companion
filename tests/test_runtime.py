@@ -19,31 +19,23 @@ from nomzy.storage import read_json_object
 
 class ProjectRuntimeTests(unittest.TestCase):
     def test_release_version(self):
-        self.assertEqual(__version__, "0.6.2")
+        self.assertEqual(__version__, "0.7.0")
 
-    def test_startup_configures_version_and_defers_overlay_to_show_event(self):
-        centered_position = object()
-
-        with (
-            patch("nomzy.main.QApplication") as application_class,
-            patch("nomzy.main.NomzyDog") as companion_class,
-            patch("nomzy.main.configure_macos_application") as configure_macos,
-        ):
-            application = application_class.return_value
-            application.exec.return_value = 0
-            companion = companion_class.return_value
-            companion.settings = {"macos_hide_dock_icon": True}
-            companion.get_saved_position.return_value = None
-            companion.get_centered_position.return_value = centered_position
-
+    def test_startup_delegates_and_always_cleans_up(self):
+        with (patch("nomzy.main.QApplication") as application_class,
+              patch("nomzy.main.ApplicationController") as controller_class):
+            application_class.return_value.exec.return_value = 0
             self.assertEqual(run(["nomzy"]), 0)
+            controller_class.return_value.start.assert_called_once()
+            controller_class.return_value.shutdown.assert_called_once()
 
-        application.setApplicationVersion.assert_called_once_with(__version__)
-        configure_macos.assert_called_once_with(hide_dock_icon=True)
-        companion.move.assert_called_once_with(centered_position)
-        companion.show.assert_called_once_with()
-        companion.apply_native_overlay_style.assert_not_called()
-        companion.enforce_always_on_top.assert_not_called()
+    def test_duplicate_launch_does_not_enter_event_loop(self):
+        with (patch("nomzy.main.QApplication") as application_class,
+              patch("nomzy.main.ApplicationController") as controller_class):
+            controller_class.return_value.start.return_value = False
+            self.assertEqual(run(["nomzy"]), 0)
+            application_class.return_value.exec.assert_not_called()
+            controller_class.return_value.shutdown.assert_called_once()
 
     def test_checkout_resources_are_discoverable(self):
         self.assertTrue((get_assets_dir() / "nomzy_animations.json").is_file())

@@ -12,7 +12,7 @@ def read_json_object(path: Path) -> dict | None:
     try:
         with open(path, "r", encoding="utf-8") as file:
             value = json.load(file)
-    except (OSError, json.JSONDecodeError) as error:
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
         LOGGER.warning("Could not load JSON object from %s: %s", path, error)
         return None
 

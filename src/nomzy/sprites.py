@@ -1,7 +1,8 @@
 import json
+import logging
 from dataclasses import dataclass
 
-from PySide6.QtGui import QPixmap, QRegion
+from PySide6.QtGui import QColor, QPainter, QPixmap, QRegion
 
 from .activity import CompanionState
 from .animation import AnimationClip, AnimationFrame, AnimationPlayback
@@ -18,6 +19,38 @@ class SpriteAssets:
 
 
 def load_sprite_assets() -> SpriteAssets:
+    try:
+        return _load_sprite_assets()
+    except (OSError, UnicodeError, ValueError, KeyError, TypeError, RuntimeError, AttributeError, OverflowError):
+        logging.getLogger(__name__).exception("Bundled artwork is unreadable; using built-in artwork")
+        return fallback_sprite_assets()
+
+
+def fallback_sprite_assets() -> SpriteAssets:
+    """Keep the companion and its controls usable without any bundled files."""
+    frame = QPixmap(80, 80)
+    frame.fill(QColor("transparent"))
+    painter = QPainter(frame)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(QColor("#593b29"))
+    painter.setBrush(QColor("#c69362"))
+    painter.drawEllipse(18, 34, 44, 38)
+    for x, y in ((5, 23), (23, 7), (43, 7), (61, 23)):
+        painter.drawEllipse(x, y, 14, 20)
+    painter.end()
+    names = ("idle", "blink", "walk", "talk", "pet", "treat", "ball", "sit", "sleep", "drag", "paused")
+    returning = {"blink", "pet", "treat", "ball", "sit"}
+    clips = {name: AnimationClip(name, (AnimationFrame(0, 500),),
+             AnimationPlayback.RETURN if name in returning else AnimationPlayback.LOOP)
+             for name in names}
+    mapping = dict(zip((CompanionState.IDLE, CompanionState.WALKING,
+        CompanionState.BLINKING, CompanionState.SITTING, CompanionState.SLEEPING,
+        CompanionState.TALKING, CompanionState.DRAGGING, CompanionState.PAUSED,
+        CompanionState.MENU), ("idle", "walk", "blink", "sit", "sleep", "talk", "drag", "paused", "paused")))
+    return SpriteAssets((frame,), clips, mapping, 0.5, 1.0)
+
+
+def _load_sprite_assets() -> SpriteAssets:
     manifest_path = get_animation_manifest_path()
 
     if not manifest_path.exists():

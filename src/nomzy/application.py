@@ -60,6 +60,7 @@ class ApplicationController(QObject):
         self.signal_timer = QTimer(self)
         self.signal_timer.timeout.connect(lambda: None)
         self.signal_timer.start(250)
+        LOGGER.info("Startup complete")
         return True
 
     def create_menu_bar(self):
@@ -128,20 +129,26 @@ class ApplicationController(QObject):
             return
         self.stopped = True
         self.save_state()
+        def cleanup(label, callback):
+            try:
+                callback()
+            except Exception:
+                LOGGER.exception("Shutdown could not %s", label)
+
         if self.nomzy is not None:
-            for timer in self.nomzy.findChildren(QTimer):
-                timer.stop()
+            cleanup("stop companion timers", lambda: [timer.stop() for timer in self.nomzy.findChildren(QTimer)])
             if self.nomzy.settings_window is not None:
-                self.nomzy.settings_window.close()
-            self.nomzy.hide()
+                cleanup("close settings", self.nomzy.settings_window.close)
+            cleanup("hide companion", self.nomzy.hide)
         if self.about_window is not None:
-            self.about_window.close()
+            cleanup("close About", self.about_window.close)
         if self.tray is not None:
-            self.tray.hide()
-            self.menu.close()
+            cleanup("hide menu-bar item", self.tray.hide)
+            cleanup("close menu", self.menu.close)
         if hasattr(self, "signal_timer"):
-            self.signal_timer.stop()
+            cleanup("stop signal timer", self.signal_timer.stop)
         for sig, handler in self.previous_signals.items():
-            signal.signal(sig, handler)
-        if self.lock is not None and self.lock.isLocked():
-            self.lock.unlock()
+            cleanup("restore signal handler", lambda sig=sig, handler=handler: signal.signal(sig, handler))
+        if self.lock is not None:
+            cleanup("release application lock", lambda: self.lock.unlock() if self.lock.isLocked() else None)
+        LOGGER.info("Shutdown complete")

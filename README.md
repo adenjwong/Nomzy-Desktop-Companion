@@ -27,3 +27,15 @@ python -m pip install 'pyinstaller>=6,<7'
 python -m PyInstaller Nomzy.spec
 open dist/Nomzy.app
 ```
+
+## Recovery and diagnostics
+
+Nomzy keeps a small rotating log at `~/Library/Logs/Nomzy/nomzy.log` on macOS
+(up to three 256 KiB files). Startup and error details are recorded there without
+opening a terminal. If bundled artwork is damaged, a built-in paw keeps the
+companion usable; reinstall Nomzy to restore its normal animations.
+
+Launch at Login reflects macOS settings. If approval is required, open System
+Settings → General → Login Items. Before shipping 0.7.2, verify a real logout/login
+cycle with Launch at Login both enabled and disabled, including macOS session
+restoration, and confirm only one companion starts.

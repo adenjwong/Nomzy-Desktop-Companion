@@ -200,5 +200,5 @@ class LoginItemTests(unittest.TestCase):
         error = Mock()
         error.localizedDescription.return_value = "Permission denied"
         item.service.registerAndReturnError_.return_value = (False, error)
-        with self.assertRaisesRegex(RuntimeError, "Permission denied"):
+        with self.assertRaisesRegex(RuntimeError, "Unable to change Launch at Login"):
             item.set_enabled(True)

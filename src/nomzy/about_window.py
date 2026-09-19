@@ -35,6 +35,8 @@ class AboutWindow(QDialog):
         layout.addWidget(self.buttons)
 
     def present(self):
+        from .macos_overlay import prepare_settings_window
+        prepare_settings_window(self)
         self.showNormal()
         self.raise_()
         self.activateWindow()

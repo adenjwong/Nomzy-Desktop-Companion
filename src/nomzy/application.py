@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 from . import __version__
 from .about_window import AboutWindow
 from .companion import NomzyDog
-from .macos_overlay import configure_macos_application
+from .macos_overlay import configure_macos_application, raise_macos_overlay
 from .paths import APPLICATION_NAME, ORGANIZATION_NAME, get_user_data_dir
 
 LOGGER = logging.getLogger(__name__)
@@ -66,7 +66,7 @@ class ApplicationController(QObject):
         self.menu = QMenu()
         self.menu.addAction("Show / Locate Nomzy", self.locate)
         self.pause_action = self.menu.addAction("Pause Nomzy", self.nomzy.toggle_pause)
-        self.menu.addAction("Settings…", self.nomzy.open_settings_window)
+        self.menu.addAction("Settings…", self.show_settings)
         self.menu.addAction("Reset Position", self.reset_position)
         self.menu.addSeparator()
         self.menu.addAction("About Nomzy", self.show_about)
@@ -93,6 +93,10 @@ class ApplicationController(QObject):
     def refresh_menu(self):
         self.pause_action.setText("Resume Nomzy" if self.nomzy.activity.paused else "Pause Nomzy")
 
+    def show_settings(self):
+        screen = QApplication.screenAt(QCursor.pos()) or QApplication.primaryScreen()
+        self.nomzy.open_settings_window(screen)
+
     def locate(self):
         self.nomzy.close_menu()
         screen = QApplication.screenAt(QCursor.pos()) or QApplication.primaryScreen()
@@ -100,12 +104,11 @@ class ApplicationController(QObject):
         if position is not None:
             self.nomzy.move(position)
         self.nomzy.show()
-        self.nomzy.raise_()
+        if not raise_macos_overlay(self.nomzy):
+            self.nomzy.raise_()
 
     def reset_position(self):
-        self.nomzy.close_menu()
-        self.nomzy.reset_position()
-        self.nomzy.show()
+        self.locate()
         self.save_state()
 
     def show_about(self):

@@ -247,11 +247,10 @@ class CompanionWindowMixin:
     def showEvent(self, event):
         super().showEvent(event)
         self.ensure_visible_on_available_screen()
-        self.apply_native_overlay_style()
+        self.apply_native_overlay_style(force=True)
         self.update_overlay_mask()
-        self.enforce_always_on_top()
 
-    def apply_native_overlay_style(self):
+    def apply_native_overlay_style(self, force=False):
         if not self.settings.get("native_macos_overlay_enabled", True):
             return
         if not is_macos():
@@ -262,6 +261,7 @@ class CompanionWindowMixin:
             window_level=(str(self.settings.get("macos_window_level", "status"))
                           if self.settings.get("always_on_top", True) else "normal"),
             prevent_activation=bool(self.settings.get("prevent_focus_steal", True)),
+            force=force,
         )
 
     def save_state(self):
@@ -393,9 +393,16 @@ class CompanionWindowMixin:
         if not self.settings["movement_enabled"] and self.activity.state is CompanionState.WALKING:
             self.transition_activity(CompanionEvent.STOP_WALKING)
             self.update_animation(0)
-        if previous_settings.get("always_on_top", True) != self.settings["always_on_top"]:
+        if any(previous_settings.get(key, True) != self.settings[key]
+               for key in ("always_on_top", "prevent_focus_steal")):
             was_visible = self.isVisible()
-            self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, self.settings["always_on_top"])
+            flags = self.windowFlags()
+            for flag, enabled in (
+                (Qt.WindowType.WindowStaysOnTopHint, self.settings["always_on_top"]),
+                (Qt.WindowType.WindowDoesNotAcceptFocus, self.settings["prevent_focus_steal"]),
+            ):
+                flags = flags | flag if enabled else flags & ~flag
+            self.setWindowFlags(flags)
             if was_visible:
                 self.show()
             self.apply_native_overlay_style()
@@ -430,6 +437,7 @@ class CompanionWindowMixin:
         )
         self.update_overlay_mask()
         self.update()
+        self.apply_native_overlay_style()
         self.enforce_always_on_top()
 
     def reset_position(self):

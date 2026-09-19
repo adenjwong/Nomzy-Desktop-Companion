@@ -105,6 +105,8 @@ class NomzySettingsWindow(QWidget):
         """Recover minimized/off-screen windows without replacing an open draft."""
         self.refresh_login_item()
         focus = self.focusWidget()
+        from .macos_overlay import prepare_settings_window
+        prepare_settings_window(self)
         self.showNormal()
         screen = screen or self.screen()
         if screen is not None:

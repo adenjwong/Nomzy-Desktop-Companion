@@ -62,6 +62,41 @@ class ApplicationTests(unittest.TestCase):
         controller.nomzy.show.assert_called_once()
         controller.nomzy.activateWindow.assert_not_called()
 
+    def test_native_locate_does_not_use_qt_raise(self):
+        controller = self.controller()
+        controller.nomzy = Mock()
+        controller.nomzy.findChildren.return_value = []
+        controller.nomzy.get_centered_position.return_value = QPoint(10, 20)
+        with patch("nomzy.application.raise_macos_overlay", return_value=True) as native_raise:
+            controller.locate()
+        native_raise.assert_called_once_with(controller.nomzy)
+        controller.nomzy.raise_.assert_not_called()
+        controller.nomzy.activateWindow.assert_not_called()
+
+    def test_menu_settings_uses_pointer_display(self):
+        controller = self.controller()
+        controller.nomzy = Mock()
+        controller.nomzy.findChildren.return_value = []
+        screen = Mock()
+        with patch("nomzy.application.QApplication.screenAt", return_value=screen):
+            controller.show_settings()
+        controller.nomzy.open_settings_window.assert_called_once_with(screen)
+
+    def test_reset_recovers_paused_companion_on_pointer_display(self):
+        controller = self.controller()
+        controller.nomzy = Mock()
+        controller.nomzy.findChildren.return_value = []
+        controller.nomzy.activity.paused = True
+        controller.nomzy.get_centered_position.return_value = QPoint(50, 60)
+        screen = Mock()
+        with patch("nomzy.application.QApplication.screenAt", return_value=screen):
+            controller.reset_position()
+        controller.nomzy.get_centered_position.assert_called_once_with(screen)
+        controller.nomzy.move.assert_called_once_with(QPoint(50, 60))
+        controller.nomzy.save_state.assert_called_once()
+        controller.nomzy.toggle_pause.assert_not_called()
+        controller.nomzy.activateWindow.assert_not_called()
+
     def test_shutdown_saves_once_even_if_save_fails_and_stops_timers(self):
         controller = self.controller()
         controller.nomzy = Mock()

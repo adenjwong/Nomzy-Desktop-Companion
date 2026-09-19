@@ -45,11 +45,25 @@ class LiveSettingsTests(unittest.TestCase):
 
     def test_name_change_preserves_walking_countdown_and_timers(self):
         self.dog.scheduler.walk_cooldown_ticks = 7
-        timers = [self.dog.timer, self.dog.topmost_timer, self.dog.position_save_timer]
+        timers = [self.dog.timer, self.dog.mask_timer, self.dog.position_save_timer]
         ids = [timer.timerId() for timer in timers]
         self.dog.apply_updated_settings(self.dog.settings | {"user_name": "Alex"})
         self.assertEqual(self.dog.scheduler.walk_cooldown_ticks, 7)
         self.assertEqual([timer.timerId() for timer in timers], ids)
+
+    def test_focus_prevention_flag_updates_in_both_directions(self):
+        for enabled in (False, True):
+            self.dog.apply_updated_settings(self.dog.settings | {"prevent_focus_steal": enabled})
+            self.assertEqual(bool(self.dog.windowFlags() & Qt.WindowType.WindowDoesNotAcceptFocus), enabled)
+
+    def test_macos_has_no_native_reconfiguration_timers(self):
+        with patch("nomzy.companion.is_macos", return_value=True), patch(
+            "nomzy.companion.load_settings", return_value=dict(DEFAULT_SETTINGS)
+        ):
+            dog = NomzyDog()
+        self.addCleanup(dog.deleteLater)
+        self.assertFalse(hasattr(dog, "topmost_timer"))
+        self.assertFalse(hasattr(dog, "native_overlay_timer"))
 
     def test_reopening_visible_settings_preserves_draft(self):
         self.dog.open_settings_window()

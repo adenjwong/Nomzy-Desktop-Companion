@@ -80,6 +80,7 @@ def configure_macos_overlay_window(
     qt_widget,
     window_level: str = "status",
     prevent_activation: bool = True,
+    force: bool = False,
 ) -> None:
     if not has_native_macos_windowing():
         return
@@ -91,6 +92,10 @@ def configure_macos_overlay_window(
 
         if ns_window is None:
             LOGGER.warning("No macOS NSWindow was found for the Nomzy overlay")
+            return
+
+        signature = (int(ns_window.windowNumber()), window_level, prevent_activation)
+        if not force and getattr(qt_widget, "_native_overlay_signature", None) == signature:
             return
 
         if hasattr(ns_window, "setOpaque_"):
@@ -128,7 +133,7 @@ def configure_macos_overlay_window(
         if hasattr(ns_window, "setCollectionBehavior_"):
             ns_window.setCollectionBehavior_(behavior)
 
-        if prevent_activation and hasattr(ns_window, "styleMask"):
+        if hasattr(ns_window, "styleMask"):
             current_style = ns_window.styleMask()
 
             nonactivating_panel_mask = getattr(
@@ -137,7 +142,9 @@ def configure_macos_overlay_window(
                 1 << 7,
             )
 
-            ns_window.setStyleMask_(current_style | nonactivating_panel_mask)
+            desired_style = (current_style | nonactivating_panel_mask) if prevent_activation else (current_style & ~nonactivating_panel_mask)
+            if desired_style != current_style:
+                ns_window.setStyleMask_(desired_style)
 
         if hasattr(ns_window, "setHidesOnDeactivate_"):
             ns_window.setHidesOnDeactivate_(False)
@@ -157,11 +164,41 @@ def configure_macos_overlay_window(
         if hasattr(ns_window, "setIgnoresMouseEvents_"):
             ns_window.setIgnoresMouseEvents_(False)
 
-        if window_level != "normal" and hasattr(ns_window, "orderFrontRegardless"):
-            ns_window.orderFrontRegardless()
+        qt_widget._native_overlay_signature = signature
 
     except Exception as error:
         LOGGER.warning("Could not configure the macOS overlay window: %s", error)
+
+
+def raise_macos_overlay(widget):
+    """An explicit Locate action may order the overlay without activating its app."""
+    if not has_native_macos_windowing():
+        return False
+    try:
+        window = get_ns_window(widget)
+        if window is not None:
+            window.orderFrontRegardless()
+            return True
+    except Exception as error:
+        LOGGER.warning("Could not order the macOS overlay: %s", error)
+    return False
+
+
+def prepare_settings_window(widget):
+    """Bring an explicitly requested utility window to the current Space."""
+    if not has_native_macos_windowing():
+        return
+    try:
+        import AppKit
+
+        window = get_ns_window(widget)
+        if window is not None:
+            window.setCollectionBehavior_(
+                AppKit.NSWindowCollectionBehaviorMoveToActiveSpace
+                | AppKit.NSWindowCollectionBehaviorFullScreenAuxiliary
+            )
+    except Exception as error:
+        LOGGER.warning("Could not configure utility window Spaces behavior: %s", error)
 
 
 def activate_settings_window(widget):

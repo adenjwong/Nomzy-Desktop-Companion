@@ -114,7 +114,7 @@ class CompanionInteractionMixin:
         elif action == "talk":
             self.say_random_speech("talk")
 
-    def open_settings_window(self):
+    def open_settings_window(self, screen=None):
         if self.settings_window is None:
             self.settings_window = NomzySettingsWindow(
                 settings=self.settings,
@@ -122,7 +122,7 @@ class CompanionInteractionMixin:
             )
         elif not self.settings_window.isVisible():
             self.settings_window.load_values(self.settings)
-        self.settings_window.present(self.get_current_screen())
+        self.settings_window.present(screen or self.get_current_screen())
 
     def begin_dragging(self):
         if self.activity.is_dragging:

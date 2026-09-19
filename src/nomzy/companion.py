@@ -5,6 +5,7 @@ from .activity import CompanionActivityMixin, CompanionStateMachine
 from .animation import AnimationPlayer
 from .behavior import CompanionBehaviorMixin
 from .interactions import CompanionInteractionMixin
+from .macos_overlay import is_macos
 from .rendering import CompanionRenderingMixin
 from .scheduling import BehaviorScheduler
 from .settings import load_settings
@@ -71,13 +72,10 @@ class NomzyDog(
         self.animation_clock.start()
 
         self.timer = self._start_timer(40, self.tick)
-        self.topmost_timer = self._start_timer(1000, self.enforce_always_on_top)
+        if not is_macos():
+            self.topmost_timer = self._start_timer(1000, self.enforce_always_on_top)
         self.position_save_timer = self._start_timer(5000, self.save_state)
         self.mask_timer = self._start_timer(120, self.update_overlay_mask)
-        self.native_overlay_timer = self._start_timer(
-            1500,
-            self.apply_native_overlay_style,
-        )
         self.initialize_screen_tracking()
 
     def _start_timer(self, interval_ms, callback):

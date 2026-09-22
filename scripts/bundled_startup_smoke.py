@@ -1,10 +1,13 @@
 """Check duplicate launch, SIGTERM, and relaunch without changing login settings."""
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
 
-binary = Path(__file__).resolve().parents[1] / "dist/Nomzy.app/Contents/MacOS/Nomzy"
+app_path = (Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else
+            Path(__file__).resolve().parents[1] / "dist/Nomzy.app")
+binary = app_path / "Contents/MacOS/Nomzy"
 
 
 def stop(process):

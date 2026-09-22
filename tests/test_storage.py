@@ -65,8 +65,18 @@ class PersistenceTests(unittest.TestCase):
         self.write_json(self.user_settings, {"walk_interval_seconds": 60})
 
         settings = load_settings()
-
         self.assertEqual(settings["walk_interval_seconds"], 60)
+
+    def test_replacing_bundle_defaults_preserves_saved_settings(self):
+        self.write_json(self.legacy_settings, {"walk_interval_seconds": 5})
+        settings = load_settings()
+        settings["walk_interval_seconds"] = 60
+        save_settings(settings)
+        saved = self.user_settings.read_bytes()
+        # Simulate replacing the app with a release carrying different defaults.
+        self.write_json(self.legacy_settings, {"walk_interval_seconds": 10})
+        self.assertEqual(load_settings()["walk_interval_seconds"], 60)
+        self.assertEqual(self.user_settings.read_bytes(), saved)
 
     def test_saving_settings_does_not_modify_the_legacy_file(self):
         self.write_json(self.legacy_settings, {"walk_interval_seconds": 5})

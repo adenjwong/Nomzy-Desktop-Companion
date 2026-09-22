@@ -27,6 +27,11 @@ def get_resource_roots() -> tuple[Path, ...]:
         frozen_path = Path(frozen_root)
         roots.extend((frozen_path, frozen_path / "share" / "nomzy"))
 
+    # A packaged app must never silently depend on a checkout or build machine.
+    if getattr(sys, "frozen", False):
+        roots.append(Path(sys.executable).resolve().parent.parent / "Resources")
+        return tuple(dict.fromkeys(roots))
+
     executable_path = Path(sys.executable).resolve()
     roots.append(executable_path.parent.parent / "Resources")
     roots.append(Path(__file__).resolve().parent)

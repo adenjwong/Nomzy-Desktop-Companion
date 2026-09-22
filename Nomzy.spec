@@ -17,12 +17,17 @@ collection = COLLECT(exe, a.binaries, a.datas, name="Nomzy")
 app = BUNDLE(
     collection,
     name="Nomzy.app",
+    icon=str(root / "packaging/Nomzy.icns"),
     bundle_identifier="com.nomzy.desktop-companion",
     version=version["__version__"],
     info_plist={
+        "CFBundleName": "Nomzy",
+        "CFBundleDisplayName": "Nomzy",
+        "NSHumanReadableCopyright": "Copyright © 2026 Nomzy contributors.",
         "LSUIElement": True,
         "LSMinimumSystemVersion": "13.0",
         "CFBundleShortVersionString": version["__version__"],
+        "CFBundleVersion": version["__version__"],
         "NSHighResolutionCapable": True,
     },
 )

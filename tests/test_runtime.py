@@ -19,7 +19,7 @@ from nomzy.storage import read_json_object
 
 class ProjectRuntimeTests(unittest.TestCase):
     def test_release_version(self):
-        self.assertEqual(__version__, "0.7.2")
+        self.assertEqual(__version__, "0.8.0")
 
     def test_startup_delegates_and_always_cleans_up(self):
         with (patch("nomzy.main.QApplication") as application_class,
@@ -50,6 +50,15 @@ class ProjectRuntimeTests(unittest.TestCase):
             with patch.dict("os.environ", {"NOMZY_RESOURCE_ROOT": str(root)}):
                 self.assertEqual(get_assets_dir(), root / "assets")
                 self.assertEqual(get_bundled_config_dir(), root / "config")
+
+    def test_frozen_app_does_not_fall_back_to_checkout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with (patch.object(sys, "frozen", True, create=True),
+                  patch.object(sys, "_MEIPASS", directory, create=True),
+                  patch.object(sys, "executable", str(Path(directory) / "Nomzy.app/Contents/MacOS/Nomzy")),
+                  patch.dict("os.environ", {"NOMZY_RESOURCE_ROOT": ""})):
+                with self.assertRaises(FileNotFoundError):
+                    get_assets_dir()
 
     def test_invalid_json_is_logged(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

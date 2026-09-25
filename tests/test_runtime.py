@@ -19,7 +19,7 @@ from nomzy.storage import read_json_object
 
 class ProjectRuntimeTests(unittest.TestCase):
     def test_release_version(self):
-        self.assertEqual(__version__, "0.8.0")
+        self.assertEqual(__version__, "0.8.1")
 
     def test_startup_delegates_and_always_cleans_up(self):
         with (patch("nomzy.main.QApplication") as application_class,

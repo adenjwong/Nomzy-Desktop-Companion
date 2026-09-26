@@ -11,3 +11,4 @@ export PYINSTALLER_CONFIG_DIR="$PWD/build/pyinstaller-cache"
 "$PYTHON" -c 'from PySide6.QtCore import qVersion; print("Qt", qVersion())'
 "$PYTHON" -m PyInstaller --clean --noconfirm Nomzy.spec
 "$PYTHON" scripts/verify_bundle.py dist/Nomzy.app
+"$PYTHON" scripts/package_macos.py dist/Nomzy.app

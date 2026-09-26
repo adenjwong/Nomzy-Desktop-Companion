@@ -1,32 +1,34 @@
 # Running Nomzy
 
-## Install the standalone app
+## Install
 
 Requires macOS 13 or later and an Apple Silicon Mac (M1 or newer).
 
-1. Copy `Nomzy.app` into your `Applications` folder.
-2. Double-click `Nomzy` to launch it.
-3. Nomzy will appear on your desktop, with a paw icon in the menu bar.
+1. Download and extract the release ZIP.
+2. Drag `Nomzy.app` into `Applications` and open it.
 
-If macOS blocks the app, go to **System Settings → Privacy & Security**, select **Open Anyway**, and confirm.
+Nomzy appears on your desktop with a paw icon in the menu bar. If macOS blocks
+it, open **System Settings → Privacy & Security → Open Anyway**.
 
-To launch Nomzy later, open it from `Applications` or search for `Nomzy` in Spotlight.
+## Update
 
-## Install and run from source
+Quit Nomzy, extract the new ZIP, and drag the app into `Applications`, choosing
+**Replace**. Your settings are preserved. Check your version under the menu-bar
+paw → **About Nomzy**.
 
-Requires macOS. Choose either Conda or Python's built-in virtual environment.
+## Uninstall
 
-First, open Terminal and navigate to the project folder, replacing the path below with its actual location:
+Turn off **Launch at Login** in Settings, quit Nomzy, and move the app to Trash.
+Your settings are kept for reinstalling.
 
-```shell
-cd /path/to/Nomzy-Desktop-Companion
-```
+For migration from older source versions or optional user-data removal, see
+[installation details](packaging/INSTALLATION.md).
 
-### Option 1: Conda
+## Run from source
 
-Requires Conda, available through Miniconda or Anaconda.
+From the project folder, choose one setup method:
 
-Create the environment using `environment.yml`. This installs Python 3.11, Nomzy, and its dependencies:
+**Conda**
 
 ```shell
 conda env create -f environment.yml
@@ -34,18 +36,7 @@ conda activate nomzy
 nomzy
 ```
 
-To run Nomzy again in a new Terminal window:
-
-```shell
-conda activate nomzy
-nomzy
-```
-
-### Option 2: Python and requirements.txt
-
-Requires Python 3.11.
-
-Create and activate a virtual environment, install the dependencies and Nomzy, then launch the app:
+**Python 3.11**
 
 ```shell
 python3.11 -m venv .venv
@@ -55,10 +46,4 @@ python -m pip install --editable .
 nomzy
 ```
 
-To run Nomzy again in a new Terminal window, return to the project folder and activate the environment:
-
-```shell
-cd /path/to/Nomzy-Desktop-Companion
-source .venv/bin/activate
-nomzy
-```
+For later runs, activate the same environment and run `nomzy`.

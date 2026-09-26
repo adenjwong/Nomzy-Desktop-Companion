@@ -103,3 +103,80 @@ evidence but does not replace testing a separate account or older macOS version.
   absolute-build-path gate remains open; functional reproducibility passed.
 - Intel, macOS 13, separate-account and Finder/Spotlight acceptance remain
   unverified for this candidate. No release tag, notarization or publication.
+
+## 0.8.2 installation and migration — 2026-09-26
+
+Distribution decision: ship a ZIP containing `Nomzy.app`. This single-app release
+needs no installer or mounted volume. macOS `ditto` preserves the bundle's
+symlinks and metadata, and users extract and drag the app into Applications.
+A DMG's Applications shortcut does not justify an additional image build/mount
+step for this release. Signing/notarization remain separate release work.
+
+Build with `PYTHON=.venv-build/bin/python sh scripts/build_macos.sh` after preparing
+the pinned build environment. The build now produces a versioned, architecture-
+labeled ZIP and SHA-256 sidecar. `scripts/package_macos.py` extracts the archive,
+copies it into an isolated Applications directory, moves the prior copy aside,
+installs its replacement, and runs the bundle verifier. It never replaces the
+user's installed application or changes their preferences.
+
+Evidence on Apple silicon, macOS 26.6.2, Python 3.11.15:
+
+- 165 tests passed, including repository settings/state migration, unchanged
+  legacy files, preference retention through replacement, the shared source and
+  frozen data location, and preservation of the old file on failed atomic writes.
+- Built 0.8.2 with the pinned toolchain; original and ZIP-extracted bundles passed
+  signature, architecture, metadata and relocated Cocoa runtime checks.
+- About's selectable version label is checked against the running code version;
+  the bundle verifier also checks that version against both Info.plist versions.
+- README documents installation, quit-before-update, checking the running
+  version, legacy source migration, uninstall, optional data/log removal, and
+  source-checkout reimport behavior.
+
+**Initial attempt: interactive acceptance was blocked.** Computer Use reported
+that permissions were not granted, so actual Finder dragging into `/Applications`,
+Finder replacement, and uninstall/reinstall were not exercised. Temporary-directory
+copying and isolated persistence tests are not a substitute for those checks.
+Complete the following with a backed-up preference folder:
+
+1. Quit every Nomzy copy, extract the ZIP in Finder, drag into Applications,
+   choose Replace when appropriate, and launch from Applications.
+2. Confirm About says 0.8.2. Save a distinctive name and speech preference, quit,
+   replace again through Finder, relaunch and confirm both survived.
+3. Disable Launch at Login, quit, move the app to Trash, reinstall and confirm
+   preferences survive. Quit, move the user-data folder to a backup location,
+   relaunch and confirm defaults; quit and restore the backup.
+4. With a disposable source checkout/account, customize legacy config files,
+   run 0.8.2 from source once and quit, then launch the installed app. Confirm
+   migrated settings and position, and that existing user data takes precedence.
+
+Prior limitations remain: minimum-OS and separate-account validation, Intel,
+notarization, and the strict zero-vendor-build-path gate are unverified/open.
+No release was published or tagged.
+
+
+### Finder retry — 2026-09-26
+
+Computer Use access became available. The following checks now passed on this Mac:
+
+- Extracted the release ZIP using Finder/Archive Utility.
+- Dragged extracted Nomzy into the Applications sidebar, accepted Finder's
+  Replace dialog, and upgraded the installed 0.8.0 app to 0.8.2.
+- Compared settings.json and state.json with a pre-upgrade backup: both were
+  byte-for-byte unchanged by replacement.
+- Launched the installed app through Finder and observed the companion.
+- Quit Nomzy, moved the installed app to Trash using Finder, and confirmed the
+  app was absent while settings remained unchanged.
+- Extracted another copy, reinstalled through Finder copy/paste, and launched
+  it successfully. Installed metadata reports 0.8.2; settings remain byte-for-byte
+  identical to the pre-upgrade backup after relaunch.
+
+The installed 0.8.2 app is left running. Trash was not emptied. A temporary
+preference backup was retained in the nomzy-finder-082-* test directory.
+No preferences were deliberately changed or removed during these tests.
+
+The core install/update/remove preference-preservation checks passed on this
+Mac. Manual About and saved-preference editing remain unverified: the tool did
+not reliably expose Nomzy's status-menu controls. The automated About/version
+checks passed previously. Optional user-data reset and separate-account legacy
+migration remain manual follow-ups; source migration has automated coverage.
+Prior minimum-OS, Intel, notarization and strict vendor-path limitations remain.

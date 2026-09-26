@@ -48,6 +48,7 @@ def verify(report_path):
         # Construct auxiliary windows to exercise their frozen imports/resources.
         settings_window = NomzySettingsWindow(defaults, lambda settings: None)
         about_window = AboutWindow(sprites.frames[0])
+        assert about_window.version_label.text() == f"Version {__version__}"
         settings_window.close()
         about_window.close()
         report = {"ok": True, "version": __version__, "frames": len(sprites.frames),

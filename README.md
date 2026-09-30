@@ -10,6 +10,9 @@ Requires macOS 13 or later and an Apple Silicon Mac (M1 or newer).
 Nomzy appears on your desktop with a paw icon in the menu bar. If macOS blocks
 it, open **System Settings → Privacy & Security → Open Anyway**.
 
+Every September 29, Nomzy wears a little purple and gold party hat. He follows
+your computer's local date and changes back at midnight, even while running.
+
 ## Update
 
 Quit Nomzy, extract the new ZIP, and drag the app into `Applications`, choosing

@@ -12,6 +12,8 @@ from PySide6.QtGui import (
 
 from PySide6.QtWidgets import QApplication
 
+from .celebration import is_party_day, with_party_hat
+
 
 class CompanionRenderingMixin:
     def interface_font(self):
@@ -65,11 +67,21 @@ class CompanionRenderingMixin:
             round(int(self.settings["sprite_width"]) * render_scale),
             round(int(self.settings["sprite_height"]) * render_scale),
         )
-        return self.current_sprite().scaled(
+        source = self.current_sprite()
+        party_day = is_party_day()
+        cache_key = (source.cacheKey(), target_size.width(), target_size.height(), party_day)
+        if getattr(self, "_scaled_sprite_key", None) == cache_key:
+            return self._scaled_sprite_cache
+        sprite = source.scaled(
             target_size,
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.FastTransformation,
         )
+        if party_day:
+            sprite = with_party_hat(sprite, source)
+        self._scaled_sprite_key = cache_key
+        self._scaled_sprite_cache = sprite
+        return sprite
 
     def get_sprite_rect(self, scaled_sprite, force_message=None, force_menu=None):
         has_message_layout = self.message if force_message is None else force_message

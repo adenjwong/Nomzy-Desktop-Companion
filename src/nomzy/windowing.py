@@ -353,10 +353,13 @@ class CompanionWindowMixin:
             desired_height = self.base_window_height
             desired_message, desired_menu = False, False
 
+        scaled_sprite = self.get_scaled_sprite()
+        desired_width = max(desired_width, scaled_sprite.width() + 16)
+        desired_height = max(desired_height, scaled_sprite.height() + 16)
+
         if self.width() == desired_width and self.height() == desired_height:
             return
 
-        scaled_sprite = self.get_scaled_sprite()
         old_sprite_rect = self.get_sprite_rect(
             scaled_sprite,
             force_message=current_speech_layout,

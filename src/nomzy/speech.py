@@ -20,6 +20,7 @@ DEFAULT_SPEECH = {
         "doing great!",
         "hello!",
         "tiny steps!",
+        "September 29th is kind of like my birthday!",
     ],
     "talk": [
         "hello, {name}!",

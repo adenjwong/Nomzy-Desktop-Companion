@@ -30,7 +30,10 @@ class AboutWindow(QDialog):
         self.version_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.version_label)
-        description = QLabel("Your desktop companion.\n\nUse the menu-bar paw to locate, pause, or configure Nomzy.")
+        description = QLabel(
+            "This project is dedicated to my first love. Thank you for being my mirror. "
+            "You've helped me grow into who I am today and I'm always gonna love you."
+        )
         description.setWordWrap(True)
         description.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(description)

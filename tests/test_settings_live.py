@@ -45,7 +45,7 @@ class LiveSettingsTests(unittest.TestCase):
 
     def test_name_change_preserves_walking_countdown_and_timers(self):
         self.dog.scheduler.walk_cooldown_ticks = 7
-        timers = [self.dog.timer, self.dog.mask_timer, self.dog.position_save_timer]
+        timers = [self.dog.timer, self.dog.position_save_timer]
         ids = [timer.timerId() for timer in timers]
         self.dog.apply_updated_settings(self.dog.settings | {"user_name": "Alex"})
         self.assertEqual(self.dog.scheduler.walk_cooldown_ticks, 7)

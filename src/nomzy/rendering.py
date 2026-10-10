@@ -16,6 +16,13 @@ from .celebration import is_party_day, with_party_hat
 
 
 class CompanionRenderingMixin:
+    def visual_signature(self):
+        """Only changes to visible content require a timer-driven repaint."""
+        return (self.animation_player.frame.sprite, self.animation_player.clip.render_scale,
+                self.animation_player.clip.mirror_with_direction, self.last_direction,
+                self.message, self.activity.menu_open, self.activity.paused,
+                self.width(), self.height(), is_party_day())
+
     def interface_font(self):
         return QFont(self.font() if hasattr(self, "font") else QApplication.font())
 
@@ -28,10 +35,12 @@ class CompanionRenderingMixin:
 
     def update_overlay_mask(self):
         if not self.settings.get("overlay_mode_enabled", True):
-            self.clearMask()
+            if not self.mask().isEmpty():
+                self.clearMask()
             return
         if not self.settings.get("overlay_mask_enabled", True):
-            self.clearMask()
+            if not self.mask().isEmpty():
+                self.clearMask()
             return
 
         scaled_sprite = self.get_scaled_sprite()
@@ -56,7 +65,9 @@ class CompanionRenderingMixin:
                 )
                 region = region.united(bubble_region)
 
-        self.setMask(region)
+        # Compare the actual mask so resize/flag changes that clear it are safe.
+        if self.mask() != region:
+            self.setMask(region)
 
     def current_sprite(self) -> QPixmap:
         return self.sprite_frames[self.animation_player.frame.sprite]

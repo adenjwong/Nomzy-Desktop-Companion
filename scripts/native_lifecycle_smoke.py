@@ -15,6 +15,7 @@ if not has_native_macos_windowing():
 with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     with patch('nomzy.companion.load_settings', return_value=dict(DEFAULT_SETTINGS)), \
+         patch('nomzy.application.get_user_data_dir', return_value=root), \
          patch('nomzy.state.get_state_path', return_value=root / 'state.json'), \
          patch('nomzy.state.get_legacy_state_path', return_value=root / 'missing.json'):
         controller = ApplicationController(app)

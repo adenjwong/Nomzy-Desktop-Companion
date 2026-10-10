@@ -11,7 +11,7 @@ class AboutWindow(QDialog):
         super().__init__()
         self.setWindowTitle("About Nomzy")
         self.setWindowFlag(Qt.WindowType.WindowContextHelpButtonHint, False)
-        self.setFixedWidth(320)
+        self.setFixedWidth(400)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(12)
@@ -37,6 +37,18 @@ class AboutWindow(QDialog):
         description.setWordWrap(True)
         description.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(description)
+        self.support_label = QLabel(
+            'Feature-complete beta · macOS 13+ · Apple silicon<br><br>'
+            '<a href="https://github.com/adenjwong/Nomzy-Desktop-Companion/issues">Report a problem</a>'
+            ' · <a href="https://github.com/adenjwong/Nomzy-Desktop-Companion#readme">Help and installation</a><br>'
+            'Include your Nomzy version, macOS version, and steps to reproduce. '
+            'Diagnostic logs: ~/Library/Logs/Nomzy/nomzy.log'
+        )
+        self.support_label.setWordWrap(True)
+        self.support_label.setOpenExternalLinks(True)
+        self.support_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextBrowserInteraction)
+        layout.addWidget(self.support_label)
         self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
         self.buttons.accepted.connect(self.accept)
         layout.addWidget(self.buttons)

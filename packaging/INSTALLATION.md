@@ -5,7 +5,7 @@
 Quit Nomzy using the menu-bar paw → **Quit Nomzy** before updating. Extract the
 new ZIP, drag `Nomzy.app` into `Applications`, and choose **Replace**. Launch the
 copy in Applications. Open the menu-bar paw → **About Nomzy** to see the exact
-running version (0.8.2 for this release).
+running version (0.9.0 for this beta).
 
 Settings and saved position live outside the app at:
 
@@ -25,7 +25,7 @@ position carry over automatically.
 
 Older versions saved `config/settings.json` and `config/state.json` inside the
 repository. Before switching, back up those files, update the source checkout to
-0.8.2 while preserving your customized config files, then run it once using the
+0.9.0 while preserving your customized config files, then run it once using the
 [source instructions](../README.md#run-from-source) and quit. This migrates each file only when its
 user-data counterpart is absent. Existing user data takes precedence. The
 migration leaves the repository files untouched. Confirm your settings before
@@ -34,7 +34,7 @@ repository and does not import its config automatically.
 
 ## Uninstall
 
-1. Turn off **Launch at login** in Nomzy's Settings, then quit from the menu-bar
+1. Turn off **Launch at Login** in Nomzy's Settings, then quit from the menu-bar
    paw. If the app is unavailable, remove/disable Nomzy in **System Settings →
    General → Login Items**.
 2. Move `Applications/Nomzy.app` to Trash. Your preferences remain for reinstall.

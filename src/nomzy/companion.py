@@ -75,7 +75,6 @@ class NomzyDog(
         if not is_macos():
             self.topmost_timer = self._start_timer(1000, self.enforce_always_on_top)
         self.position_save_timer = self._start_timer(5000, self.save_state)
-        self.mask_timer = self._start_timer(120, self.update_overlay_mask)
         self.initialize_screen_tracking()
 
     def _start_timer(self, interval_ms, callback):
@@ -112,5 +111,8 @@ class NomzyDog(
         self.update_animation(elapsed_ms)
 
         self.update_window_size_for_state()
-        self.update_overlay_mask()
-        self.update()
+        visual = self.visual_signature()
+        if visual != getattr(self, "_last_tick_visual", None):
+            self._last_tick_visual = visual
+            self.update_overlay_mask()
+            self.update()
